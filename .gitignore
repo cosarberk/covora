@@ -1,0 +1,30 @@
+# Bağımlılıklar
+node_modules/
+
+# Derleme çıktıları
+dist/
+build/
+*.tsbuildinfo
+
+# Turbo
+.turbo/
+
+# Ortam değişkenleri
+.env
+.env.local
+.env.*.local
+
+# Loglar
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editör / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Test / coverage
+coverage/

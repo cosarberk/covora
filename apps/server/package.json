@@ -1,0 +1,23 @@
+{
+  "name": "@covora/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Covora review sunucusu (motor + REST API)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@covora/core": "workspace:*",
+    "@covora/types": "workspace:*",
+    "fastify": "^5.1.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}

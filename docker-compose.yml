@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: covora-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-covora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-covora}
+      POSTGRES_DB: ${POSTGRES_DB:-covora}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - covora-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-covora}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    container_name: covora-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-covora}:${POSTGRES_PASSWORD:-covora}@postgres:5432/${POSTGRES_DB:-covora}
+      PORT: 4000
+    ports:
+      - '${SERVER_PORT:-4000}:4000'
+
+  studio:
+    build:
+      context: .
+      dockerfile: apps/studio/Dockerfile
+    container_name: covora-studio
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - '${STUDIO_PORT:-4100}:80'
+
+volumes:
+  covora-pgdata:

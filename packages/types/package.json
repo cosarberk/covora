@@ -1,0 +1,25 @@
+{
+  "name": "@covora/types",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Covora paylaşılan tipleri ve zod şemaları (tek doğruluk kaynağı)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  }
+}
