@@ -1,0 +1,32 @@
+{
+  "name": "@covora/provider-ollama",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Covora LlmProvider'ın Ollama (Qwen3-VL vb.) implementasyonu",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@covora/core": "workspace:*",
+    "@covora/types": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8"
+  }
+}
