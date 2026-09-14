@@ -1,13 +1,14 @@
 /**
- * @module @covora/studio
+ * @module studio/main
  *
- * Covora yönetim arayüzünün (studio) giriş noktası. Bu iskelet adımında
- * yalnızca uygulamayı bağlar; kural editörü ve review/coverage panosu
- * sonraki adımlarda eklenecektir.
+ * Covora studio uygulamasının giriş noktası.
  */
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+
+import { App } from './App.js'
+import './index.css'
 
 const rootElement = document.getElementById('root')
 
@@ -17,6 +18,6 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <h1>Covora Studio</h1>
+    <App />
   </StrictMode>
 )
