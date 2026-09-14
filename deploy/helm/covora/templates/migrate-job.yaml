@@ -1,0 +1,27 @@
+# Şema uygulama Job'ı. Helm post-install/upgrade hook'u olarak çalışır;
+# Postgres hazır olduğunda şemayı DB'ye uygular (prisma db push).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: covora-migrate
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    'helm.sh/hook': post-install,post-upgrade
+    'helm.sh/hook-weight': '0'
+    'helm.sh/hook-delete-policy': before-hook-creation
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        app: covora-migrate
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: {{ .Values.image.registry }}/server:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ['pnpm', '--filter', '@covora/db', 'run', 'db:push']
+          env:
+            - name: DATABASE_URL
+              value: postgresql://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres:5432/{{ .Values.postgres.db }}

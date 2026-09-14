@@ -1,0 +1,55 @@
+# Covora Helm değerleri. Cluster'a özel alanları (registry, storageClass)
+# doldurun; gerisi makul varsayılanlarla gelir.
+
+image:
+  # server ve studio imajlarının bulunduğu registry ön eki
+  registry: registry.example.com/covora
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Boş bırakılırsa cluster'ın varsayılan StorageClass'ı kullanılır
+storageClass: ''
+
+postgres:
+  image: postgres:17-alpine
+  user: covora
+  password: covora
+  db: covora
+  storage: 5Gi
+  resources:
+    requests:
+      cpu: '250m'
+      memory: 256Mi
+    limits:
+      cpu: '1'
+      memory: 1Gi
+
+ollama:
+  image: ollama/ollama:latest
+  storage: 20Gi
+  keepAlive: 30m
+  models:
+    ui: qwen3-vl:8b
+    code: qwen3-coder:7b
+  resources:
+    requests:
+      cpu: '4'
+      memory: 10Gi
+    limits:
+      cpu: '16'
+      memory: 16Gi
+
+server:
+  replicas: 1
+  port: 4000
+  resources:
+    requests:
+      cpu: '250m'
+      memory: 256Mi
+    limits:
+      cpu: '1'
+      memory: 512Mi
+
+studio:
+  replicas: 1
+  port: 80

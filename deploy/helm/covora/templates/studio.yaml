@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: studio
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.studio.replicas }}
+  selector:
+    matchLabels:
+      app: studio
+  template:
+    metadata:
+      labels:
+        app: studio
+    spec:
+      containers:
+        - name: studio
+          image: {{ .Values.image.registry }}/studio:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.studio.port }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.studio.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: studio
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: studio
+  ports:
+    - port: {{ .Values.studio.port }}
+      targetPort: {{ .Values.studio.port }}

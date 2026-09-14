@@ -10,7 +10,8 @@ import { createStudioApi } from './api/client.js'
 import { ReviewsPanel } from './components/ReviewsPanel.js'
 import { RulesPanel } from './components/RulesPanel.js'
 
-const serverUrl = import.meta.env.VITE_COVORA_SERVER_URL ?? 'http://localhost:4000'
+// Prod'da boş = same-origin (nginx API'yi server'a proxy'ler). Dev'de Vite proxy devreye girer.
+const serverUrl = import.meta.env.VITE_COVORA_SERVER_URL ?? ''
 const api = createStudioApi({ baseUrl: serverUrl })
 
 type Tab = 'rules' | 'reviews'
