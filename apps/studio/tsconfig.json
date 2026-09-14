@@ -6,6 +6,8 @@
     "declarationMap": false,
     "sourceMap": false,
     "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["vite/client"]
