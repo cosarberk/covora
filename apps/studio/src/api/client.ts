@@ -4,7 +4,7 @@
  * Covora sunucusunun yönetim uç noktalarını çağıran client.
  */
 
-import type { ReviewKind, Rule, RuleEvaluationType, Severity } from '@covora/types'
+import type { ManagementRule, ReviewKind, Rule, RuleEvaluationType, Severity } from '@covora/types'
 
 /** Studio API yapılandırması. */
 export interface StudioApiConfig {
@@ -51,7 +51,7 @@ export interface UpdateRuleInput {
 
 /** Studio API arayüzü. */
 export interface StudioApi {
-  listRules(projectKey: string): Promise<readonly Rule[]>
+  listRules(projectKey: string): Promise<readonly ManagementRule[]>
   createRule(projectKey: string, input: CreateRuleInput): Promise<Rule>
   updateRule(ruleId: string, patch: UpdateRuleInput): Promise<void>
   listReviews(projectKey: string): Promise<readonly ReviewRecord[]>
@@ -84,7 +84,9 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
 
   return {
     async listRules(projectKey) {
-      const data = await parseJson<{ rules: Rule[] }>(await fetch(url(`${projectPath(projectKey)}/rules`)))
+      const data = await parseJson<{ rules: ManagementRule[] }>(
+        await fetch(url(`${projectPath(projectKey)}/rules`))
+      )
       return data.rules
     },
 

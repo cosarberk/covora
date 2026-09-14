@@ -12,8 +12,8 @@ import {
   findProjectByKey,
   getEffectiveConfig,
   listEnabledRules,
+  listManagementRules,
   listRecentReviews,
-  listRules,
   saveReview,
   updateRuleWithAudit,
   upsertProject
@@ -45,7 +45,7 @@ const start = async (): Promise<void> => {
   const managementDeps: ManagementDeps = {
     findProjectByKey: (key) => findProjectByKey(prisma, key),
     upsertProject: (key, name) => upsertProject(prisma, key, name),
-    listRules: (projectId) => listRules(prisma, projectId),
+    listRules: (projectId) => listManagementRules(prisma, projectId),
     createRule: (data, changedBy) => createRule(prisma, data, changedBy),
     updateRule: (ruleId, patch, changedBy) => updateRuleWithAudit(prisma, ruleId, patch, changedBy),
     listRecentReviews: async (projectId, limit) =>

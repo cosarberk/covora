@@ -6,7 +6,7 @@
  */
 
 import type { CreateRuleData } from '@covora/db'
-import type { ReviewKind, Rule, Severity } from '@covora/types'
+import type { ManagementRule, ReviewKind, Rule, Severity } from '@covora/types'
 
 /** Bir kural güncellemesinde değiştirilebilir alanlar. */
 export interface RulePatch {
@@ -42,8 +42,8 @@ export interface ManagementDeps {
   readonly findProjectByKey: (key: string) => Promise<{ readonly id: string } | null>
   /** Projeyi oluşturur ya da adını günceller. */
   readonly upsertProject: (key: string, name: string) => Promise<ProjectRecord>
-  /** Projenin (ve global) tüm kurallarını getirir. */
-  readonly listRules: (projectId: string) => Promise<readonly Rule[]>
+  /** Projenin (ve global) tüm kurallarını yönetim modeli olarak getirir. */
+  readonly listRules: (projectId: string) => Promise<readonly ManagementRule[]>
   /** Yeni kural oluşturur (audit'li). */
   readonly createRule: (data: CreateRuleData, changedBy: string) => Promise<Rule>
   /** Kuralı günceller (audit'li). */

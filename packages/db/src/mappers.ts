@@ -8,6 +8,7 @@ import {
   coverageConfigSchema,
   type CoverageConfig,
   type GatePolicy,
+  type ManagementRule,
   type Rule
 } from '@covora/types'
 import type { ProjectConfig as PrismaProjectConfig, Rule as PrismaRule } from '@prisma/client'
@@ -28,6 +29,25 @@ export const toDomainRule = (rule: PrismaRule): Rule => ({
   evaluation: rule.evaluation,
   severity: rule.severity,
   weight: rule.weight
+})
+
+/**
+ * Prisma kuralını yönetim modeline dönüştürür. Domain modelden farklı olarak
+ * kalıcılık kimliğini (`id`) ve `enabled` durumunu taşır.
+ *
+ * @param rule - Prisma kural kaydı.
+ * @returns {@link ManagementRule}.
+ */
+export const toManagementRule = (rule: PrismaRule): ManagementRule => ({
+  id: rule.id,
+  key: rule.key,
+  title: rule.title,
+  description: rule.description,
+  kind: rule.kind,
+  evaluation: rule.evaluation,
+  severity: rule.severity,
+  weight: rule.weight,
+  enabled: rule.enabled
 })
 
 /**

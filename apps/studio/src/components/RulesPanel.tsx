@@ -4,7 +4,7 @@
  * Bir projenin kurallarını listeler ve yeni kural oluşturur.
  */
 
-import type { ReviewKind, Rule, RuleEvaluationType, Severity } from '@covora/types'
+import type { ManagementRule, ReviewKind, RuleEvaluationType, Severity } from '@covora/types'
 import { useCallback, useEffect, useState } from 'react'
 
 import type { CreateRuleInput, StudioApi } from '../api/client.js'
@@ -30,7 +30,7 @@ const emptyForm: CreateRuleInput = {
  * @param props - API ve proje anahtarı.
  */
 export const RulesPanel = ({ api, projectKey }: RulesPanelProps): React.JSX.Element => {
-  const [rules, setRules] = useState<readonly Rule[]>([])
+  const [rules, setRules] = useState<readonly ManagementRule[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState<CreateRuleInput>(emptyForm)
@@ -52,7 +52,17 @@ export const RulesPanel = ({ api, projectKey }: RulesPanelProps): React.JSX.Elem
     void load()
   }, [load])
 
-  const submit = async (event: React.FormEvent): Promise<void> => {
+  const toggleEnabled = async (rule: ManagementRule): Promise<void> => {
+    setError(null)
+    try {
+      await api.updateRule(rule.id, { enabled: !rule.enabled })
+      await load()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Bilinmeyen hata')
+    }
+  }
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     if (form.key.trim().length === 0 || form.title.trim().length === 0) {
       return
@@ -141,6 +151,7 @@ export const RulesPanel = ({ api, projectKey }: RulesPanelProps): React.JSX.Elem
               <th>Değerlendirme</th>
               <th>Önem</th>
               <th>Ağırlık</th>
+              <th>Durum</th>
             </tr>
           </thead>
           <tbody>
@@ -156,6 +167,15 @@ export const RulesPanel = ({ api, projectKey }: RulesPanelProps): React.JSX.Elem
                   <span className={`badge badge--${rule.severity}`}>{rule.severity}</span>
                 </td>
                 <td>{rule.weight}</td>
+                <td>
+                  <button
+                    type="button"
+                    className={rule.enabled ? 'toggle toggle--on' : 'toggle'}
+                    onClick={() => void toggleEnabled(rule)}
+                  >
+                    {rule.enabled ? 'Etkin' : 'Kapalı'}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -4,10 +4,16 @@
  * Kural veri erişimi. Değişiklikler audit kaydıyla birlikte yazılır.
  */
 
-import type { ReviewKind, RuleEvaluationType, Rule, Severity } from '@covora/types'
+import type {
+  ManagementRule,
+  ReviewKind,
+  RuleEvaluationType,
+  Rule,
+  Severity
+} from '@covora/types'
 import type { Prisma, PrismaClient } from '@prisma/client'
 
-import { toDomainRule } from '../mappers.js'
+import { toDomainRule, toManagementRule } from '../mappers.js'
 
 /** Yeni bir kural oluşturmak için gerekli alanlar. */
 export interface CreateRuleData {
@@ -69,6 +75,25 @@ export const listRules = async (prisma: PrismaClient, projectId: string): Promis
     orderBy: { key: 'asc' }
   })
   return rules.map(toDomainRule)
+}
+
+/**
+ * Bir projenin (ve global) tüm kurallarını yönetim modeli olarak getirir
+ * (kalıcılık kimliği ve `enabled` dahil).
+ *
+ * @param prisma - Prisma client.
+ * @param projectId - Proje kimliği.
+ * @returns Yönetim kural listesi.
+ */
+export const listManagementRules = async (
+  prisma: PrismaClient,
+  projectId: string
+): Promise<ManagementRule[]> => {
+  const rules = await prisma.rule.findMany({
+    where: { OR: [{ projectId }, { projectId: null }] },
+    orderBy: { key: 'asc' }
+  })
+  return rules.map(toManagementRule)
 }
 
 /**

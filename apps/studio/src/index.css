@@ -203,3 +203,18 @@ body {
 .state--error {
   color: var(--fail);
 }
+
+.toggle {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.toggle--on {
+  color: var(--pass);
+  border-color: var(--pass);
+}
