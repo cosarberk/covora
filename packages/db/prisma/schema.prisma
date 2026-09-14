@@ -1,0 +1,120 @@
+// Covora veri modeli. Kurallar, projeler, review kayıtları ve coverage
+// geçmişi burada tutulur. Migration'lar `pnpm --filter @covora/db db:migrate`
+// ile üretilir (DATABASE_URL gerektirir).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ReviewKind {
+  ui
+  code
+}
+
+enum RuleEvaluation {
+  deterministic
+  llm
+}
+
+enum Severity {
+  blocker
+  warning
+  info
+}
+
+enum ChecklistOutcome {
+  pass
+  partial
+  fail
+}
+
+/// Review edilen bir birim (plugin / repo).
+model Project {
+  id        String         @id @default(cuid())
+  key       String         @unique
+  name      String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  rules     Rule[]
+  reviews   Review[]
+  config    ProjectConfig?
+}
+
+/// Tek bir review kuralı. `projectId` null ise global (varsayılan) kuraldır.
+model Rule {
+  id          String         @id @default(cuid())
+  projectId   String?
+  project     Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  key         String
+  title       String
+  description String         @default("")
+  kind        ReviewKind
+  evaluation  RuleEvaluation
+  severity    Severity
+  weight      Float
+  prompt      String?
+  enabled     Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  audits      RuleAudit[]
+
+  @@unique([projectId, key])
+  @@index([kind, enabled])
+}
+
+/// Kural değişikliklerinin izlenebilirlik kaydı (kim/ne zaman/ne değişti).
+model RuleAudit {
+  id        String   @id @default(cuid())
+  ruleId    String
+  rule      Rule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  action    String
+  changedBy String
+  changes   Json
+  createdAt DateTime @default(now())
+
+  @@index([ruleId, createdAt])
+}
+
+/// Bir review çalıştırmasının kaydı.
+model Review {
+  id         String         @id @default(cuid())
+  projectId  String
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind       ReviewKind
+  codeHash   String
+  score      Float
+  level      String
+  gatePassed Boolean
+  createdAt  DateTime       @default(now())
+  results    ReviewResult[]
+
+  @@index([projectId, createdAt])
+}
+
+/// Bir review içindeki tek bir kural sonucu.
+model ReviewResult {
+  id       String           @id @default(cuid())
+  reviewId String
+  review   Review           @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  ruleKey  String
+  outcome  ChecklistOutcome
+  note     String?
+
+  @@index([reviewId])
+}
+
+/// Proje bazlı coverage yapılandırması ve gate politikası.
+model ProjectConfig {
+  id                        String  @id @default(cuid())
+  projectId                 String  @unique
+  project                   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  partialCredit             Float   @default(0.5)
+  levels                    Json
+  gateMinScore              Float   @default(60)
+  gateBlockOnFailedBlockers Boolean @default(true)
+}

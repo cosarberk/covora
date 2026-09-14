@@ -10,7 +10,7 @@ import { z } from 'zod'
 /** Ollama sağlayıcısının yapılandırma şeması. */
 export const ollamaProviderConfigSchema = z.object({
   /** Ollama sunucusunun temel adresi (örn. http://uzak-sunucu:11434). */
-  baseUrl: z.string().url(),
+  baseUrl: z.url(),
   /** Kullanılacak model etiketi (örn. `qwen3-vl:8b`). */
   model: z.string().min(1),
   /** Bu sağlayıcının işlediği review türü. */
