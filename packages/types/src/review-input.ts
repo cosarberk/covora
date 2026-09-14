@@ -7,6 +7,8 @@
 
 import { z } from 'zod'
 
+import { ruleResultSchema } from './checklist.js'
+
 /** Code review'da değerlendirilecek tek bir kaynak dosya. */
 export const codeFileSchema = z.object({
   /** Depoya göreli dosya yolu. */
@@ -26,7 +28,12 @@ export const reviewInputSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('ui'),
     /** Base64 kodlu ekran görüntüsü (PNG). */
-    screenshot: z.string().min(1)
+    screenshot: z.string().min(1),
+    /**
+     * Client tarafında (DOM üzerinde) hesaplanan deterministik kural sonuçları.
+     * Server DOM'a erişemediği için UI deterministik kuralları burada gelir.
+     */
+    clientResults: z.array(ruleResultSchema).optional()
   }),
   z.object({
     kind: z.literal('code'),

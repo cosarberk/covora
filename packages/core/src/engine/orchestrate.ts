@@ -72,17 +72,27 @@ export const runReview = async (options: RunReviewOptions): Promise<ReviewOutcom
   const deterministicRules = relevantRules.filter((rule) => rule.evaluation === 'deterministic')
   const llmRules = relevantRules.filter((rule) => rule.evaluation === 'llm')
 
+  const clientResultsById = new Map(
+    (input.kind === 'ui' && input.clientResults !== undefined ? input.clientResults : []).map(
+      (result) => [result.ruleId, result]
+    )
+  )
+
   const deterministicResults = await Promise.all(
     deterministicRules.map(async (rule): Promise<RuleResult> => {
       const checker = checkers[rule.id]
-      if (checker === undefined) {
-        return {
-          ruleId: rule.id,
-          outcome: 'fail',
-          note: 'Deterministik kontrol tanımlı değil'
-        }
+      if (checker !== undefined) {
+        return checker(rule, input)
       }
-      return checker(rule, input)
+      const clientResult = clientResultsById.get(rule.id)
+      if (clientResult !== undefined) {
+        return clientResult
+      }
+      return {
+        ruleId: rule.id,
+        outcome: 'fail',
+        note: 'Deterministik kontrol tanımlı değil'
+      }
     })
   )
 

@@ -9,3 +9,4 @@
 export * from './capture.js'
 export * from './client.js'
 export * from './chat.js'
+export * from './dom-checks.js'

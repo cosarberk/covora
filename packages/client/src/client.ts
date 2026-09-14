@@ -8,6 +8,7 @@
 import type { ReviewInput, ReviewOutcome } from '@covora/types'
 
 import { captureScreenshot } from './capture.js'
+import { runDomChecks } from './dom-checks.js'
 
 /** Client yapılandırması. */
 export interface CovoraClientConfig {
@@ -69,7 +70,8 @@ export const createCovoraClient = (config: CovoraClientConfig): CovoraClient => 
     element: HTMLElement = document.body
   ): Promise<CreateReviewResponse> => {
     const screenshot = await captureScreenshot(element)
-    return review({ input: { kind: 'ui', screenshot }, codeHash })
+    const clientResults = runDomChecks(element)
+    return review({ input: { kind: 'ui', screenshot, clientResults }, codeHash })
   }
 
   return { review, reviewUi }
