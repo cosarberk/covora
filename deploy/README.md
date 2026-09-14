@@ -9,13 +9,14 @@ Server ve studio imajları bir registry'de olmalı (k8s oradan çeker). Depo
 kökünden:
 
 ```bash
-REG=registry.example.com/covora   # kendi registry ön ekin
+REG=docker.io/cosarberk   # Docker Hub kullanıcısı (eventium ile aynı)
 TAG=latest
 
-docker build -f apps/server/Dockerfile -t $REG/server:$TAG .
-docker build -f apps/studio/Dockerfile -t $REG/studio:$TAG .
-docker push $REG/server:$TAG
-docker push $REG/studio:$TAG
+docker login                                                    # Docker Hub'a giriş
+docker build -f apps/server/Dockerfile -t $REG/covora-server:$TAG .
+docker build -f apps/studio/Dockerfile -t $REG/covora-studio:$TAG .
+docker push $REG/covora-server:$TAG
+docker push $REG/covora-studio:$TAG
 ```
 
 ## Kur (tek komut)

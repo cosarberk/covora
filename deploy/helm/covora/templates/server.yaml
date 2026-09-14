@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: server
-          image: {{ .Values.image.registry }}/server:{{ .Values.image.tag }}
+          image: {{ .Values.image.registry }}/covora-server:{{ .Values.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.server.port }}

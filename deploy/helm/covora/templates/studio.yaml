@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: studio
-          image: {{ .Values.image.registry }}/studio:{{ .Values.image.tag }}
+          image: {{ .Values.image.registry }}/covora-studio:{{ .Values.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.studio.port }}

@@ -2,10 +2,11 @@
 # doldurun; gerisi makul varsayılanlarla gelir.
 
 image:
-  # server ve studio imajlarının bulunduğu registry ön eki
-  registry: registry.example.com/covora
+  # Docker Hub kullanıcısı; imajlar <registry>/covora-server ve <registry>/covora-studio
+  registry: docker.io/cosarberk
   tag: latest
-  pullPolicy: IfNotPresent
+  # Always: Rancher'da "Redeploy" her seferinde taze latest'i çeker (eventium ile aynı düzen)
+  pullPolicy: Always
 
 # Boş bırakılırsa cluster'ın varsayılan StorageClass'ı kullanılır
 storageClass: ''

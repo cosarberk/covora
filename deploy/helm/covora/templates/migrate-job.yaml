@@ -19,7 +19,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: migrate
-          image: {{ .Values.image.registry }}/server:{{ .Values.image.tag }}
+          image: {{ .Values.image.registry }}/covora-server:{{ .Values.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ['pnpm', '--filter', '@covora/db', 'run', 'db:push']
           env:
