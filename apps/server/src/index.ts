@@ -7,14 +7,20 @@
 
 import {
   createPrismaClient,
+  createRule,
   findProjectByKey,
   getEffectiveConfig,
   listEnabledRules,
-  saveReview
+  listRecentReviews,
+  listRules,
+  saveReview,
+  updateRuleWithAudit,
+  upsertProject
 } from '@covora/db'
 
 import { buildApp } from './app.js'
 import { loadEnv } from './config/env.js'
+import type { ManagementDeps } from './services/management.js'
 import { createProviderFactory } from './services/provider-factory.js'
 import type { CreateReviewDeps } from './services/review.service.js'
 
@@ -34,7 +40,25 @@ const start = async (): Promise<void> => {
     saveReview: (input) => saveReview(prisma, input)
   }
 
-  const app = buildApp({ reviewDeps })
+  const managementDeps: ManagementDeps = {
+    findProjectByKey: (key) => findProjectByKey(prisma, key),
+    upsertProject: (key, name) => upsertProject(prisma, key, name),
+    listRules: (projectId) => listRules(prisma, projectId),
+    createRule: (data, changedBy) => createRule(prisma, data, changedBy),
+    updateRule: (ruleId, patch, changedBy) => updateRuleWithAudit(prisma, ruleId, patch, changedBy),
+    listRecentReviews: async (projectId, limit) =>
+      (await listRecentReviews(prisma, projectId, limit)).map((review) => ({
+        id: review.id,
+        kind: review.kind,
+        codeHash: review.codeHash,
+        score: review.score,
+        level: review.level,
+        gatePassed: review.gatePassed,
+        createdAt: review.createdAt.toISOString()
+      }))
+  }
+
+  const app = buildApp({ reviewDeps, managementDeps })
 
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' })
