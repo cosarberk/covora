@@ -5,7 +5,7 @@
  * dışarıdan enjekte edilir; bu sayede servis saf ve test edilebilirdir.
  */
 
-import { runReview, type LlmProvider } from '@covora/core'
+import { runReview, type CheckerRegistry, type LlmProvider } from '@covora/core'
 import type { EffectiveConfig, SaveReviewInput } from '@covora/db'
 import type { ReviewInput, ReviewKind, ReviewOutcome, Rule } from '@covora/types'
 
@@ -29,6 +29,8 @@ export interface CreateReviewDeps {
   readonly createProvider: (kind: ReviewKind) => LlmProvider
   /** Review sonucunu kaydeder ve kimliğini döner. */
   readonly saveReview: (input: SaveReviewInput) => Promise<string>
+  /** Deterministik kurallar için checker kaydı (opsiyonel). */
+  readonly checkers?: CheckerRegistry
 }
 
 /** Review oluşturma isteği. */
@@ -77,7 +79,8 @@ export const createReview = async (
     input: request.input,
     provider,
     config: config.coverageConfig,
-    policy: config.gatePolicy
+    policy: config.gatePolicy,
+    ...(deps.checkers !== undefined ? { checkers: deps.checkers } : {})
   })
 
   const reviewId = await deps.saveReview({

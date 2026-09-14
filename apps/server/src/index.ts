@@ -5,6 +5,7 @@
  * sağlayıcı bağımlılıklarını bağlar ve HTTP sunucusunu başlatır.
  */
 
+import { builtinCodeCheckers } from '@covora/checkers'
 import {
   createPrismaClient,
   createRule,
@@ -37,7 +38,8 @@ const start = async (): Promise<void> => {
     listEnabledRules: (projectId, kind) => listEnabledRules(prisma, projectId, kind),
     getEffectiveConfig: (projectId) => getEffectiveConfig(prisma, projectId),
     createProvider,
-    saveReview: (input) => saveReview(prisma, input)
+    saveReview: (input) => saveReview(prisma, input),
+    checkers: builtinCodeCheckers
   }
 
   const managementDeps: ManagementDeps = {

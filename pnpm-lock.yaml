@@ -23,6 +23,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@covora/checkers':
+        specifier: workspace:*
+        version: link:../../packages/checkers
       '@covora/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -79,6 +82,19 @@ importers:
       vite:
         specifier: ^6.0.3
         version: 6.4.3(@types/node@22.20.2)(tsx@4.23.13)
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.2)(jsdom@25.0.1)
+
+  packages/checkers:
+    dependencies:
+      '@covora/core':
+        specifier: workspace:*
+        version: link:../core
+      '@covora/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.2)(jsdom@25.0.1)
