@@ -123,6 +123,11 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
     return reply.status(204).send()
   })
 
+  app.get('/rules/:id/audits', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return reply.send({ audits: await deps.listRuleAudits(id) })
+  })
+
   app.get('/projects/:key/reviews', async (request, reply) => {
     const { key } = request.params as { key: string }
     const project = await deps.findProjectByKey(key)

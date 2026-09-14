@@ -15,6 +15,7 @@ import {
   listEnabledRules,
   listManagementRules,
   listRecentReviews,
+  listRuleAudits,
   saveReview,
   updateRuleWithAudit,
   upsertProject
@@ -50,6 +51,7 @@ const start = async (): Promise<void> => {
     listRules: (projectId) => listManagementRules(prisma, projectId),
     createRule: (data, changedBy) => createRule(prisma, data, changedBy),
     updateRule: (ruleId, patch, changedBy) => updateRuleWithAudit(prisma, ruleId, patch, changedBy),
+    listRuleAudits: (ruleId) => listRuleAudits(prisma, ruleId),
     listRecentReviews: async (projectId, limit) =>
       (await listRecentReviews(prisma, projectId, limit)).map((review) => ({
         id: review.id,

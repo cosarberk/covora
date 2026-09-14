@@ -1,13 +1,20 @@
 /**
  * @module studio/components/RulesPanel
  *
- * Bir projenin kurallarını listeler ve yeni kural oluşturur.
+ * Bir projenin kurallarını listeler, oluşturur, düzenler (önem/ağırlık/durum)
+ * ve değişiklik geçmişini (audit) gösterir.
  */
 
-import type { ManagementRule, ReviewKind, RuleEvaluationType, Severity } from '@covora/types'
-import { useCallback, useEffect, useState } from 'react'
+import type {
+  AuditRecord,
+  ManagementRule,
+  ReviewKind,
+  RuleEvaluationType,
+  Severity
+} from '@covora/types'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 
-import type { CreateRuleInput, StudioApi } from '../api/client.js'
+import type { CreateRuleInput, StudioApi, UpdateRuleInput } from '../api/client.js'
 
 /** {@link RulesPanel} props. */
 export interface RulesPanelProps {
@@ -24,8 +31,10 @@ const emptyForm: CreateRuleInput = {
   weight: 1
 }
 
+const SEVERITIES: readonly Severity[] = ['blocker', 'warning', 'info']
+
 /**
- * Kural listeleme ve oluşturma paneli.
+ * Kural yönetim paneli.
  *
  * @param props - API ve proje anahtarı.
  */
@@ -35,6 +44,8 @@ export const RulesPanel = ({ api, projectKey }: RulesPanelProps): React.JSX.Elem
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState<CreateRuleInput>(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [auditsFor, setAuditsFor] = useState<string | null>(null)
+  const [audits, setAudits] = useState<readonly AuditRecord[]>([])
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -52,11 +63,25 @@ export const RulesPanel = ({ api, projectKey }: RulesPanelProps): React.JSX.Elem
     void load()
   }, [load])
 
-  const toggleEnabled = async (rule: ManagementRule): Promise<void> => {
+  const patchRule = async (ruleId: string, patch: UpdateRuleInput): Promise<void> => {
     setError(null)
     try {
-      await api.updateRule(rule.id, { enabled: !rule.enabled })
+      await api.updateRule(ruleId, patch)
       await load()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Bilinmeyen hata')
+    }
+  }
+
+  const showAudits = async (ruleId: string): Promise<void> => {
+    if (auditsFor === ruleId) {
+      setAuditsFor(null)
+      return
+    }
+    setError(null)
+    try {
+      setAudits(await api.listAudits(ruleId))
+      setAuditsFor(ruleId)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Bilinmeyen hata')
     }
@@ -118,9 +143,11 @@ export const RulesPanel = ({ api, projectKey }: RulesPanelProps): React.JSX.Elem
           value={form.severity}
           onChange={(event) => setForm({ ...form, severity: event.target.value as Severity })}
         >
-          <option value="blocker">blocker</option>
-          <option value="warning">warning</option>
-          <option value="info">info</option>
+          {SEVERITIES.map((severity) => (
+            <option key={severity} value={severity}>
+              {severity}
+            </option>
+          ))}
         </select>
         <input
           className="input input--narrow"
@@ -148,35 +175,86 @@ export const RulesPanel = ({ api, projectKey }: RulesPanelProps): React.JSX.Elem
               <th>Anahtar</th>
               <th>Başlık</th>
               <th>Tür</th>
-              <th>Değerlendirme</th>
               <th>Önem</th>
               <th>Ağırlık</th>
               <th>Durum</th>
+              <th>Geçmiş</th>
             </tr>
           </thead>
           <tbody>
             {rules.map((rule) => (
-              <tr key={rule.id}>
-                <td className="mono">{rule.id}</td>
-                <td>{rule.title}</td>
-                <td>
-                  <span className="badge">{rule.kind}</span>
-                </td>
-                <td>{rule.evaluation}</td>
-                <td>
-                  <span className={`badge badge--${rule.severity}`}>{rule.severity}</span>
-                </td>
-                <td>{rule.weight}</td>
-                <td>
-                  <button
-                    type="button"
-                    className={rule.enabled ? 'toggle toggle--on' : 'toggle'}
-                    onClick={() => void toggleEnabled(rule)}
-                  >
-                    {rule.enabled ? 'Etkin' : 'Kapalı'}
-                  </button>
-                </td>
-              </tr>
+              <Fragment key={rule.id}>
+                <tr>
+                  <td className="mono">{rule.key}</td>
+                  <td>{rule.title}</td>
+                  <td>
+                    <span className="badge">{rule.kind}</span>
+                  </td>
+                  <td>
+                    <select
+                      className="select select--sm"
+                      value={rule.severity}
+                      onChange={(event) =>
+                        void patchRule(rule.id, { severity: event.target.value as Severity })
+                      }
+                    >
+                      {SEVERITIES.map((severity) => (
+                        <option key={severity} value={severity}>
+                          {severity}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      key={`${rule.id}-${rule.weight}`}
+                      className="input input--narrow"
+                      type="number"
+                      min={0.1}
+                      step={0.1}
+                      defaultValue={rule.weight}
+                      onBlur={(event) => {
+                        const weight = Number(event.target.value)
+                        if (weight > 0 && weight !== rule.weight) {
+                          void patchRule(rule.id, { weight })
+                        }
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className={rule.enabled ? 'toggle toggle--on' : 'toggle'}
+                      onClick={() => void patchRule(rule.id, { enabled: !rule.enabled })}
+                    >
+                      {rule.enabled ? 'Etkin' : 'Kapalı'}
+                    </button>
+                  </td>
+                  <td>
+                    <button type="button" className="link-button" onClick={() => void showAudits(rule.id)}>
+                      {auditsFor === rule.id ? 'Gizle' : 'Geçmiş'}
+                    </button>
+                  </td>
+                </tr>
+                {auditsFor === rule.id && (
+                  <tr>
+                    <td colSpan={7} className="audit-cell">
+                      {audits.length === 0 ? (
+                        <span className="mono">Kayıt yok</span>
+                      ) : (
+                        <ul className="audit-list">
+                          {audits.map((audit) => (
+                            <li key={audit.id} className="mono">
+                              {new Date(audit.createdAt).toLocaleString('tr-TR')} · {audit.action} ·{' '}
+                              {audit.changedBy}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </tbody>
         </table>

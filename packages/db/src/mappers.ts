@@ -6,12 +6,17 @@
 
 import {
   coverageConfigSchema,
+  type AuditRecord,
   type CoverageConfig,
   type GatePolicy,
   type ManagementRule,
   type Rule
 } from '@covora/types'
-import type { ProjectConfig as PrismaProjectConfig, Rule as PrismaRule } from '@prisma/client'
+import type {
+  ProjectConfig as PrismaProjectConfig,
+  RuleAudit as PrismaRuleAudit,
+  Rule as PrismaRule
+} from '@prisma/client'
 
 /**
  * Prisma kuralını domain kuralına dönüştürür. Domain kimliği (`id`) olarak
@@ -72,4 +77,18 @@ export const toCoverageConfig = (config: PrismaProjectConfig): CoverageConfig =>
 export const toGatePolicy = (config: PrismaProjectConfig): GatePolicy => ({
   minScore: config.gateMinScore,
   blockOnFailedBlockers: config.gateBlockOnFailedBlockers
+})
+
+/**
+ * Prisma audit kaydını domain audit modeline dönüştürür.
+ *
+ * @param audit - Prisma audit kaydı.
+ * @returns {@link AuditRecord}.
+ */
+export const toAuditRecord = (audit: PrismaRuleAudit): AuditRecord => ({
+  id: audit.id,
+  action: audit.action,
+  changedBy: audit.changedBy,
+  changes: audit.changes,
+  createdAt: audit.createdAt.toISOString()
 })

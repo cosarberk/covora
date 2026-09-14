@@ -218,3 +218,30 @@ body {
   color: var(--pass);
   border-color: var(--pass);
 }
+
+.select--sm {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+}
+
+.audit-cell {
+  background: var(--bg);
+}
+
+.audit-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.audit-list li {
+  padding: 2px 0;
+}

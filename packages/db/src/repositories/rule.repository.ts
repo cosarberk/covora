@@ -5,6 +5,7 @@
  */
 
 import type {
+  AuditRecord,
   ManagementRule,
   ReviewKind,
   RuleEvaluationType,
@@ -13,7 +14,7 @@ import type {
 } from '@covora/types'
 import type { Prisma, PrismaClient } from '@prisma/client'
 
-import { toDomainRule, toManagementRule } from '../mappers.js'
+import { toAuditRecord, toDomainRule, toManagementRule } from '../mappers.js'
 
 /** Yeni bir kural oluşturmak için gerekli alanlar. */
 export interface CreateRuleData {
@@ -144,6 +145,24 @@ export const createRule = async (
  * @param changes - Uygulanacak değişiklikler.
  * @param changedBy - İşlemi yapan kullanıcı.
  */
+/**
+ * Bir kuralın audit kayıtlarını (yeniden eskiye) getirir.
+ *
+ * @param prisma - Prisma client.
+ * @param ruleId - Kural kimliği.
+ * @returns Audit kayıtları.
+ */
+export const listRuleAudits = async (
+  prisma: PrismaClient,
+  ruleId: string
+): Promise<AuditRecord[]> => {
+  const audits = await prisma.ruleAudit.findMany({
+    where: { ruleId },
+    orderBy: { createdAt: 'desc' }
+  })
+  return audits.map(toAuditRecord)
+}
+
 export const updateRuleWithAudit = async (
   prisma: PrismaClient,
   ruleId: string,

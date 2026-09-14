@@ -6,7 +6,7 @@
  */
 
 import type { CreateRuleData } from '@covora/db'
-import type { ManagementRule, ReviewKind, Rule, Severity } from '@covora/types'
+import type { AuditRecord, ManagementRule, ReviewKind, Rule, Severity } from '@covora/types'
 
 /** Bir kural güncellemesinde değiştirilebilir alanlar. */
 export interface RulePatch {
@@ -48,6 +48,8 @@ export interface ManagementDeps {
   readonly createRule: (data: CreateRuleData, changedBy: string) => Promise<Rule>
   /** Kuralı günceller (audit'li). */
   readonly updateRule: (ruleId: string, patch: RulePatch, changedBy: string) => Promise<void>
+  /** Bir kuralın audit geçmişini getirir. */
+  readonly listRuleAudits: (ruleId: string) => Promise<readonly AuditRecord[]>
   /** Projenin son review'larını getirir. */
   readonly listRecentReviews: (projectId: string, limit?: number) => Promise<readonly ReviewRecord[]>
 }
