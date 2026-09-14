@@ -5,6 +5,10 @@
  * verilir; böylece test ve bootstrap ayrışır.
  */
 
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+
+import fastifyStatic from '@fastify/static'
 import Fastify, { type FastifyInstance } from 'fastify'
 
 import { registerChatRoutes, type ChatDeps } from './routes/chat.js'
@@ -37,6 +41,19 @@ export const buildApp = (deps: AppDeps): FastifyInstance => {
   registerReviewRoutes(app, deps.reviewDeps)
   registerManagementRoutes(app, deps.managementDeps)
   registerChatRoutes(app, deps.chatDeps)
+
+  // Studio (React) statik dosyalarını aynı sunucudan serve et (tek image).
+  // Dizin yoksa (geliştirmede studio ayrı Vite sunucusu) atlanır.
+  const studioDir = process.env.STUDIO_DIR ?? path.resolve('apps/studio/dist')
+  if (existsSync(studioDir)) {
+    void app.register(fastifyStatic, { root: studioDir })
+    app.setNotFoundHandler((request, reply) => {
+      if (request.method === 'GET' && !request.url.startsWith('/api')) {
+        return reply.sendFile('index.html')
+      }
+      return reply.status(404).send({ error: 'Bulunamadı' })
+    })
+  }
 
   return app
 }

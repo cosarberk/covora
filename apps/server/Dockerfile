@@ -1,12 +1,13 @@
-# Covora server — multi-stage monorepo build.
-# Depo kökünden build edilir:  docker build -f apps/server/Dockerfile .
+# Covora — tek image: Fastify server + gömülü studio (React static).
+# Depo kökünden build edilir:  docker build -f apps/server/Dockerfile -t cosarberk/covora .
 
 FROM node:22-alpine AS build
 RUN corepack enable
 WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @covora/server... build
+# Tüm workspace: server + studio (studio dist server tarafından serve edilir)
+RUN pnpm build
 
 FROM node:22-alpine AS runtime
 RUN corepack enable

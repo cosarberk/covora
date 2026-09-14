@@ -40,6 +40,7 @@ ollama:
       cpu: '16'
       memory: 16Gi
 
+# Tek servis: Fastify API + gömülü studio (React static) aynı porttan.
 server:
   replicas: 1
   port: 4000
@@ -50,7 +51,3 @@ server:
     limits:
       cpu: '1'
       memory: 512Mi
-
-studio:
-  replicas: 1
-  port: 80

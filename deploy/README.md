@@ -5,18 +5,16 @@ Tek komutla tam kurulum: **Postgres + Ollama (modeller otomatik iner) + DB şema
 
 ## Önkoşul: imajları build et ve registry'ye push et
 
-Server ve studio imajları bir registry'de olmalı (k8s oradan çeker). Depo
-kökünden:
+Tek image (server + gömülü studio) bir registry'de olmalı (k8s oradan çeker).
+Depo kökünden:
 
 ```bash
 REG=docker.io/cosarberk   # Docker Hub kullanıcısı (eventium ile aynı)
 TAG=latest
 
-docker login                                                    # Docker Hub'a giriş
-docker build -f apps/server/Dockerfile -t $REG/covora-server:$TAG .
-docker build -f apps/studio/Dockerfile -t $REG/covora-studio:$TAG .
-docker push $REG/covora-server:$TAG
-docker push $REG/covora-studio:$TAG
+docker login                                              # Docker Hub'a giriş
+docker build -f apps/server/Dockerfile -t $REG/covora:$TAG .
+docker push $REG/covora:$TAG
 ```
 
 ## Kur (tek komut)
@@ -34,8 +32,8 @@ Bu tek komut şunları yapar:
 2. Ollama'yı kurar; hazır olunca `qwen3-vl:8b` ve `qwen3-coder:7b` modellerini
    **otomatik indirir** (idempotent; model PVC'de kalıcı).
 3. Şemayı DB'ye uygular (post-install Job, `prisma db push`).
-4. server ve studio'yu ayağa kaldırır. Studio API'yi same-origin nginx proxy
-   ile server'a yönlendirir (build-time URL gerekmez).
+4. Covora'yı (Fastify API + gömülü studio) ayağa kaldırır — tek servis,
+   studio ve API aynı porttan (same-origin, URL derdi yok).
 
 ## Doğrula
 
@@ -47,11 +45,11 @@ kubectl -n covora logs job/covora-migrate     # şema uygulandı mı
 ## Eriş
 
 ```bash
-kubectl -n covora port-forward svc/studio 8080:80
-# tarayıcı: http://localhost:8080
+kubectl -n covora port-forward svc/covora 8080:4000
+# tarayıcı: http://localhost:8080  (studio UI + API aynı adreste)
 ```
 
-Kalıcı erişim için studio (ve gerekiyorsa server) önüne bir Ingress eklenebilir.
+Kalıcı erişim için `covora` servisi önüne bir Ingress eklenebilir.
 
 ## Notlar
 
