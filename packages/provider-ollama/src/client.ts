@@ -29,7 +29,7 @@ const ollamaChatResponseSchema = z.object({
 export const callOllamaChat = async (
   config: OllamaProviderConfig,
   messages: readonly OllamaMessage[],
-  format: unknown
+  format?: unknown
 ): Promise<string> => {
   const controller = new AbortController()
   const timer = setTimeout(() => {
@@ -43,8 +43,8 @@ export const callOllamaChat = async (
       body: JSON.stringify({
         model: config.model,
         messages,
-        format,
-        stream: false
+        stream: false,
+        ...(format !== undefined ? { format } : {})
       }),
       signal: controller.signal
     })

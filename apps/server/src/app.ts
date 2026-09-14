@@ -7,6 +7,7 @@
 
 import Fastify, { type FastifyInstance } from 'fastify'
 
+import { registerChatRoutes, type ChatDeps } from './routes/chat.js'
 import { registerHealthRoutes } from './routes/health.js'
 import { registerManagementRoutes } from './routes/management.js'
 import { registerReviewRoutes } from './routes/reviews.js'
@@ -19,6 +20,8 @@ export interface AppDeps {
   readonly reviewDeps: CreateReviewDeps
   /** Yönetim (studio) bağımlılıkları. */
   readonly managementDeps: ManagementDeps
+  /** İnteraktif sohbet bağımlılıkları. */
+  readonly chatDeps: ChatDeps
 }
 
 /**
@@ -33,6 +36,7 @@ export const buildApp = (deps: AppDeps): FastifyInstance => {
   registerHealthRoutes(app)
   registerReviewRoutes(app, deps.reviewDeps)
   registerManagementRoutes(app, deps.managementDeps)
+  registerChatRoutes(app, deps.chatDeps)
 
   return app
 }

@@ -8,7 +8,7 @@ import type { ChecklistItem, ReviewInput, ReviewKind } from '@covora/types'
 
 /** Ollama sohbet mesajı. */
 export interface OllamaMessage {
-  readonly role: 'system' | 'user'
+  readonly role: 'system' | 'user' | 'assistant'
   readonly content: string
   readonly images?: readonly string[]
 }

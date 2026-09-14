@@ -6,6 +6,7 @@
  */
 
 import { builtinCodeCheckers } from '@covora/checkers'
+import { createOllamaChat } from '@covora/provider-ollama'
 import {
   createPrismaClient,
   createRule,
@@ -21,6 +22,7 @@ import {
 
 import { buildApp } from './app.js'
 import { loadEnv } from './config/env.js'
+import type { ChatDeps } from './routes/chat.js'
 import type { ManagementDeps } from './services/management.js'
 import { createProviderFactory } from './services/provider-factory.js'
 import type { CreateReviewDeps } from './services/review.service.js'
@@ -60,7 +62,17 @@ const start = async (): Promise<void> => {
       }))
   }
 
-  const app = buildApp({ reviewDeps, managementDeps })
+  const chat = createOllamaChat({
+    baseUrl: env.OLLAMA_UI_BASE_URL,
+    model: env.OLLAMA_UI_MODEL,
+    kind: 'ui'
+  })
+
+  const chatDeps: ChatDeps = {
+    sendChat: (messages) => chat.send(messages)
+  }
+
+  const app = buildApp({ reviewDeps, managementDeps, chatDeps })
 
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' })
