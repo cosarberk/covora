@@ -26,16 +26,28 @@ importers:
       '@covora/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@covora/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@covora/provider-ollama':
+        specifier: workspace:*
+        version: link:../../packages/provider-ollama
       '@covora/types':
         specifier: workspace:*
         version: link:../../packages/types
       fastify:
         specifier: ^5.1.0
         version: 5.12.4
+      zod:
+        specifier: ^4.3.6
+        version: 4.6.2
     devDependencies:
       tsx:
         specifier: ^4.19.2
         version: 4.23.13
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.2)
 
   apps/studio:
     dependencies:
