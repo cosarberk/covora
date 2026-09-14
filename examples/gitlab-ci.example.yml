@@ -1,0 +1,24 @@
+# Covora code review — GitLab CI örneği
+#
+# Bir plugin/repo'nun .gitlab-ci.yml'ine eklenir. `covora review` gate
+# geçmezse sıfırdan farklı çıkış kodu döner; job kırmızı olur ve (branch
+# protection'da "required" işaretlenmişse) merge engellenir.
+#
+# Gerekli CI değişkenleri:
+#   COVORA_SERVER  — Covora sunucu adresi (örn. http://covora:4000)
+
+covora-code-review:
+  stage: review
+  image: node:22-alpine
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  script:
+    # Değişen TS dosyalarını hedef dala göre topla
+    - CHANGED=$(git diff --name-only "origin/$CI_DEFAULT_BRANCH...HEAD" -- '*.ts' '*.tsx')
+    - if [ -z "$CHANGED" ]; then echo "Değişen TS dosyası yok, atlanıyor"; exit 0; fi
+    - >
+      npx covora review
+      --server "$COVORA_SERVER"
+      --project "$CI_PROJECT_NAME"
+      --code-hash "$CI_COMMIT_SHA"
+      $CHANGED

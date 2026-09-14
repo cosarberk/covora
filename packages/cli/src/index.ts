@@ -1,9 +1,8 @@
 /**
  * @module @covora/cli
  *
- * Covora komut satırı arayüzü. Review'ı mock-shell dışında da (bağımsız,
- * npm ile kurulup) çalıştırabilmek için tasarlanmıştır. Komut tanımları
- * ve giriş noktası (bin) bu adımın kapsamında bilinçli olarak ertelenmiştir.
+ * Covora komut satırı arayüzü. Review'ı pipeline'da (ya da bağımsız) çalıştırıp
+ * merge gate kararını çıkış koduna yansıtır. Komut tanımları `bin.ts` içindedir.
  */
 
-export {}
+export * from './review-command.js'

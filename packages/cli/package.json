@@ -2,7 +2,7 @@
   "name": "@covora/cli",
   "version": "0.0.0",
   "private": true,
-  "description": "Covora komut satırı arayüzü",
+  "description": "Covora komut satırı arayüzü (pipeline entegrasyonu)",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -19,11 +19,16 @@
   "scripts": {
     "build": "tsc -b",
     "dev": "tsc -b --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "clean": "rm -rf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {
-    "@covora/core": "workspace:*",
-    "@covora/types": "workspace:*"
+    "@covora/types": "workspace:*",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8"
   }
 }
