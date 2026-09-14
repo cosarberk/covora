@@ -23,6 +23,43 @@ export interface ReviewsPanelProps {
 const formatDate = (iso: string): string => new Date(iso).toLocaleString('tr-TR')
 
 /**
+ * Coverage skorlarının zaman içindeki trendini basit bir sparkline olarak
+ * çizer (0-100 ölçeğinde, eskiden yeniye).
+ *
+ * @param props - Review kayıtları.
+ */
+const CoverageSparkline = ({
+  reviews
+}: {
+  reviews: readonly ReviewRecord[]
+}): React.JSX.Element | null => {
+  if (reviews.length < 2) {
+    return null
+  }
+
+  const scores = [...reviews].reverse().map((review) => review.score)
+  const width = 640
+  const height = 80
+  const padding = 6
+  const points = scores
+    .map((score, index) => {
+      const x = padding + (index / (scores.length - 1)) * (width - 2 * padding)
+      const y = height - padding - (score / 100) * (height - 2 * padding)
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+
+  return (
+    <div className="sparkline-wrap">
+      <div className="sparkline-title">Coverage trendi (eskiden yeniye)</div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="sparkline" preserveAspectRatio="none">
+        <polyline points={points} fill="none" stroke="var(--accent)" strokeWidth={2} />
+      </svg>
+    </div>
+  )
+}
+
+/**
  * Review geçmişi paneli.
  *
  * @param props - API ve proje anahtarı.
@@ -59,10 +96,12 @@ export const ReviewsPanel = ({ api, projectKey }: ReviewsPanelProps): React.JSX.
   }
 
   return (
-    <table className="table">
-      <thead>
-        <tr>
-          <th>Tarih</th>
+    <>
+      <CoverageSparkline reviews={reviews} />
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Tarih</th>
           <th>Tür</th>
           <th>Skor</th>
           <th>Seviye</th>
@@ -88,6 +127,7 @@ export const ReviewsPanel = ({ api, projectKey }: ReviewsPanelProps): React.JSX.
           </tr>
         ))}
       </tbody>
-    </table>
+      </table>
+    </>
   )
 }
