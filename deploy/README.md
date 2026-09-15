@@ -44,12 +44,21 @@ kubectl -n covora logs job/covora-migrate     # şema uygulandı mı
 
 ## Eriş
 
+Hızlı test (port-forward):
 ```bash
 kubectl -n covora port-forward svc/covora 8080:4000
 # tarayıcı: http://localhost:8080  (studio UI + API aynı adreste)
 ```
 
-Kalıcı erişim için `covora` servisi önüne bir Ingress eklenebilir.
+Kalıcı URL (Ingress) — kurulumda etkinleştir:
+```bash
+helm install covora deploy/helm/covora --namespace covora --create-namespace \
+  --set ingress.enabled=true \
+  --set ingress.host=covora.musteri.com
+# TLS için ek olarak: --set ingress.tls.enabled=true
+```
+Rancher UI'dan kurarken de Install ekranındaki değerlerde `ingress.enabled=true`
+ve `ingress.host`'u doldurmak yeterli. UI + API aynı host'tan (same-origin) gelir.
 
 ## Notlar
 

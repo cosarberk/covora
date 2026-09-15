@@ -51,3 +51,19 @@ server:
     limits:
       cpu: '1'
       memory: 512Mi
+
+# Dış erişim (UI + API aynı host, same-origin). enabled=true + host verildiğinde
+# müşteri Covora'ya bu URL'den erişir.
+ingress:
+  enabled: false
+  className: nginx
+  host: covora.example.com
+  annotations:
+    # Ekran görüntüsü base64'ü büyük olabilir
+    nginx.ingress.kubernetes.io/proxy-body-size: '25m'
+    # CPU'da LLM review yavaştır; bağlantı erken kapanmasın
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '3600'
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '3600'
+  tls:
+    enabled: false
+    secretName: covora-tls
