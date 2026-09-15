@@ -26,5 +26,8 @@ pnpm-debug.log*
 .vscode/*
 !.vscode/extensions.json
 
-# Test / coverage
-coverage/
+# Test coverage raporları (yalnızca paket kökündeki rapor çıktıları;
+# src/coverage gibi kaynak dizinleri ETKİLENMEZ)
+/coverage/
+/packages/*/coverage/
+/apps/*/coverage/
