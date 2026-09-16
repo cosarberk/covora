@@ -7,6 +7,7 @@
 import {
   coverageConfigSchema,
   userRoleSchema,
+  webhookEventSchema,
   type AuditRecord,
   type CoverageConfig,
   type GatePolicy,
@@ -14,7 +15,8 @@ import {
   type Pack,
   type ProviderConfig,
   type Rule,
-  type User
+  type User,
+  type Webhook
 } from '@covora/types'
 import type {
   Pack as PrismaPack,
@@ -22,7 +24,8 @@ import type {
   ProviderConfig as PrismaProviderConfig,
   RuleAudit as PrismaRuleAudit,
   Rule as PrismaRule,
-  User as PrismaUser
+  User as PrismaUser,
+  Webhook as PrismaWebhook
 } from '@prisma/client'
 
 /**
@@ -135,6 +138,23 @@ export const toUser = (user: PrismaUser): User => ({
   id: user.id,
   email: user.email,
   role: userRoleSchema.catch('admin').parse(user.role)
+})
+
+/**
+ * Prisma webhook kaydını domain modeline dönüştürür. Geçersiz olay adları
+ * ayıklanır.
+ *
+ * @param webhook - Prisma webhook kaydı.
+ * @returns {@link Webhook}.
+ */
+export const toWebhook = (webhook: PrismaWebhook): Webhook => ({
+  id: webhook.id,
+  url: webhook.url,
+  events: webhook.events.flatMap((event) => {
+    const parsed = webhookEventSchema.safeParse(event)
+    return parsed.success ? [parsed.data] : []
+  }),
+  active: webhook.active
 })
 
 export const toAuditRecord = (audit: PrismaRuleAudit): AuditRecord => ({

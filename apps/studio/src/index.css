@@ -545,3 +545,9 @@ body {
 .delta--none {
   color: var(--text-dim);
 }
+
+.webhook-url {
+  max-width: 320px;
+  overflow-x: auto;
+  white-space: nowrap;
+}

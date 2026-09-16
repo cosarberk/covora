@@ -46,6 +46,21 @@ model Project {
   packs       ProjectPack[]
   reviews     Review[]
   config      ProjectConfig?
+  webhooks    Webhook[]
+}
+
+/// Bir projeye ait bildirim webhook'u. Seçilen olaylarda hedef URL'ye POST atılır.
+model Webhook {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  url       String
+  events    String[]
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
 }
 
 /// Studio kullanıcısı. Kimlik doğrulama (JWT) için.

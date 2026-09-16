@@ -16,9 +16,11 @@ import {
   createProvider as createProviderRecord,
   createRule,
   createUser,
+  createWebhook,
   deletePack,
   deleteProjectByKey,
   deleteProvider,
+  deleteWebhook,
   ensureBuiltinPacks,
   findProjectByKey,
   findUserByEmail,
@@ -33,11 +35,14 @@ import {
   listProjects,
   listProviders,
   listRecentReviews,
+  listActiveWebhooks,
   listRuleAudits,
   listRulesByPack,
+  listWebhooks,
   removePackFromProject,
   saveReview,
   setActiveProvider,
+  setWebhookActive,
   toUser,
   updateRuleWithAudit,
   upsertProject
@@ -50,6 +55,7 @@ import { loadEnv } from './config/env.js'
 import type { AuthDeps } from './routes/auth.js'
 import type { ChatDeps } from './routes/chat.js'
 import type { ManagementDeps } from './services/management.js'
+import { dispatchReviewNotifications } from './services/notifications.js'
 import { createProviderFactory } from './services/provider-factory.js'
 import type { CreateReviewDeps } from './services/review.service.js'
 
@@ -90,6 +96,12 @@ const start = async (): Promise<void> => {
     createProvider: resolveProvider,
     getLatestScore: (projectId, kind) => getLatestReviewScore(prisma, projectId, kind),
     saveReview: (input) => saveReview(prisma, input),
+    notify: (payload) => {
+      void dispatchReviewNotifications(
+        { listActiveWebhooks: (projectId) => listActiveWebhooks(prisma, projectId) },
+        payload
+      )
+    },
     checkers: builtinCodeCheckers
   }
 
@@ -135,6 +147,10 @@ const start = async (): Promise<void> => {
         createdAt: review.createdAt.toISOString()
       })),
     getDashboard: () => getDashboardSummary(prisma),
+    listWebhooks: (projectId) => listWebhooks(prisma, projectId),
+    createWebhook: (data) => createWebhook(prisma, data),
+    setWebhookActive: (id, active) => setWebhookActive(prisma, id, active),
+    deleteWebhook: (id) => deleteWebhook(prisma, id),
     listProviders: () => listProviders(prisma),
     createProvider: (input) => createProviderRecord(prisma, input),
     setActiveProvider: (id) => setActiveProvider(prisma, id),

@@ -5,7 +5,7 @@
  * Bağımlılıklar dışarıdan enjekte edilir.
  */
 
-import type { CreateRuleData, PackInput, ProviderInput } from '@covora/db'
+import type { CreateRuleData, CreateWebhookData, PackInput, ProviderInput } from '@covora/db'
 import type {
   AuditRecord,
   DashboardSummary,
@@ -14,7 +14,8 @@ import type {
   ProviderConfig,
   ReviewKind,
   Rule,
-  Severity
+  Severity,
+  Webhook
 } from '@covora/types'
 
 /** Bir kural güncellemesinde değiştirilebilir alanlar. */
@@ -93,4 +94,12 @@ export interface ManagementDeps {
   readonly listRecentReviews: (projectId: string, limit?: number) => Promise<readonly ReviewRecord[]>
   /** Tüm projeler genelinde genel bakış özetini getirir. */
   readonly getDashboard: () => Promise<DashboardSummary>
+  /** Projenin bildirim webhook'larını listeler. */
+  readonly listWebhooks: (projectId: string) => Promise<readonly Webhook[]>
+  /** Yeni webhook oluşturur. */
+  readonly createWebhook: (data: CreateWebhookData) => Promise<Webhook>
+  /** Bir webhook'un etkinlik durumunu değiştirir. */
+  readonly setWebhookActive: (id: string, active: boolean) => Promise<void>
+  /** Bir webhook'u siler. */
+  readonly deleteWebhook: (id: string) => Promise<void>
 }

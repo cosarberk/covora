@@ -5,7 +5,12 @@
  * geçmişi.
  */
 
-import { reviewKindSchema, ruleEvaluationTypeSchema, severitySchema } from '@covora/types'
+import {
+  reviewKindSchema,
+  ruleEvaluationTypeSchema,
+  severitySchema,
+  webhookEventSchema
+} from '@covora/types'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
@@ -37,6 +42,15 @@ const createPackBodySchema = z.object({
 
 const assignPackBodySchema = z.object({
   packId: z.string().min(1)
+})
+
+const createWebhookBodySchema = z.object({
+  url: z.string().min(1),
+  events: z.array(webhookEventSchema).min(1)
+})
+
+const webhookPatchBodySchema = z.object({
+  active: z.boolean()
 })
 
 const createProviderBodySchema = z.object({
@@ -221,6 +235,49 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
   })
 
   app.get('/dashboard', async () => deps.getDashboard())
+
+  app.get('/projects/:key/webhooks', async (request, reply) => {
+    const { key } = request.params as { key: string }
+    const project = await deps.findProjectByKey(key)
+    if (project === null) {
+      return reply.status(404).send({ error: `Proje bulunamadı: ${key}` })
+    }
+    return reply.send({ webhooks: await deps.listWebhooks(project.id) })
+  })
+
+  app.post('/projects/:key/webhooks', async (request, reply) => {
+    const { key } = request.params as { key: string }
+    const parsed = createWebhookBodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
+    }
+    const project = await deps.findProjectByKey(key)
+    if (project === null) {
+      return reply.status(404).send({ error: `Proje bulunamadı: ${key}` })
+    }
+    const webhook = await deps.createWebhook({
+      projectId: project.id,
+      url: parsed.data.url,
+      events: parsed.data.events
+    })
+    return reply.status(201).send(webhook)
+  })
+
+  app.patch('/webhooks/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const parsed = webhookPatchBodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
+    }
+    await deps.setWebhookActive(id, parsed.data.active)
+    return reply.status(204).send()
+  })
+
+  app.delete('/webhooks/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    await deps.deleteWebhook(id)
+    return reply.status(204).send()
+  })
 
   app.get('/providers', async () => ({ providers: await deps.listProviders() }))
 

@@ -17,12 +17,13 @@ import { ProjectPacksPanel } from './components/ProjectPacksPanel.js'
 import { ProvidersPanel } from './components/ProvidersPanel.js'
 import { ReviewsPanel } from './components/ReviewsPanel.js'
 import { RulesPanel } from './components/RulesPanel.js'
+import { WebhooksPanel } from './components/WebhooksPanel.js'
 
 // Prod'da boş = same-origin (server studio'yu serve eder). Dev'de Vite proxy.
 const serverUrl = import.meta.env.VITE_COVORA_SERVER_URL ?? ''
 const api = createStudioApi({ baseUrl: serverUrl })
 
-type Tab = 'packs' | 'rules' | 'reviews'
+type Tab = 'packs' | 'rules' | 'reviews' | 'webhooks'
 type View = 'dashboard' | 'project' | 'providers' | 'packs'
 
 /** Studio uygulaması. */
@@ -282,6 +283,13 @@ export const App = (): React.JSX.Element => {
                 >
                   Review Geçmişi
                 </button>
+                <button
+                  type="button"
+                  className={tab === 'webhooks' ? 'tab tab--active' : 'tab'}
+                  onClick={() => setTab('webhooks')}
+                >
+                  Bildirimler
+                </button>
               </nav>
 
               {tab === 'packs' ? (
@@ -292,8 +300,10 @@ export const App = (): React.JSX.Element => {
                   loadRules={loadProjectRules}
                   emptyLabel="Bu proje bir pack'e abone değil ya da abone pack'lerde kural yok."
                 />
-              ) : (
+              ) : tab === 'reviews' ? (
                 <ReviewsPanel api={api} projectKey={selected} />
+              ) : (
+                <WebhooksPanel api={api} projectKey={selected} />
               )}
             </>
           )}

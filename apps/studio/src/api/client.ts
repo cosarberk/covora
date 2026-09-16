@@ -16,7 +16,9 @@ import type {
   Rule,
   RuleEvaluationType,
   Severity,
-  User
+  User,
+  Webhook,
+  WebhookEvent
 } from '@covora/types'
 
 /** Studio API yapılandırması. */
@@ -64,6 +66,12 @@ export interface CreatePackInput {
   readonly name: string
   readonly description?: string
   readonly kind: ReviewKind
+}
+
+/** Yeni webhook oluşturma girdisi. */
+export interface CreateWebhookInput {
+  readonly url: string
+  readonly events: readonly WebhookEvent[]
 }
 
 /** Yeni sağlayıcı girdisi. */
@@ -115,6 +123,10 @@ export interface StudioApi {
   listProjectPacks(projectKey: string): Promise<readonly Pack[]>
   assignPack(projectKey: string, packId: string): Promise<void>
   removePack(projectKey: string, packId: string): Promise<void>
+  listWebhooks(projectKey: string): Promise<readonly Webhook[]>
+  createWebhook(projectKey: string, input: CreateWebhookInput): Promise<Webhook>
+  setWebhookActive(id: string, active: boolean): Promise<void>
+  deleteWebhook(id: string): Promise<void>
 }
 
 const TOKEN_KEY = 'covora.token'
@@ -318,6 +330,25 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
           method: 'DELETE'
         })
       )
+    },
+
+    async listWebhooks(projectKey) {
+      const data = await json<{ webhooks: Webhook[] }>(
+        await authFetch(`${projectPath(projectKey)}/webhooks`)
+      )
+      return data.webhooks
+    },
+
+    async createWebhook(projectKey, input) {
+      return json<Webhook>(await postJson(`${projectPath(projectKey)}/webhooks`, input))
+    },
+
+    async setWebhookActive(id, active) {
+      ok(await postJson(`/webhooks/${encodeURIComponent(id)}`, { active }, 'PATCH'))
+    },
+
+    async deleteWebhook(id) {
+      ok(await authFetch(`/webhooks/${encodeURIComponent(id)}`, { method: 'DELETE' }))
     }
   }
 }

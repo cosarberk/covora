@@ -9,6 +9,8 @@ import { runReview, type CheckerRegistry, type LlmProvider } from '@covora/core'
 import type { EffectiveConfig, SaveReviewInput } from '@covora/db'
 import type { ReviewInput, ReviewKind, ReviewOutcome, Rule } from '@covora/types'
 
+import type { ReviewNotification } from './notifications.js'
+
 /** Proje bulunamadığında fırlatılır. */
 export class ProjectNotFoundError extends Error {
   public constructor(public readonly projectKey: string) {
@@ -31,6 +33,8 @@ export interface CreateReviewDeps {
   readonly getLatestScore: (projectId: string, kind: ReviewKind) => Promise<number | null>
   /** Review sonucunu kaydeder ve kimliğini döner. */
   readonly saveReview: (input: SaveReviewInput) => Promise<string>
+  /** Review tamamlandığında bildirim tetikler (ateşle-unut; opsiyonel). */
+  readonly notify?: (payload: ReviewNotification) => void
   /** Deterministik kurallar için checker kaydı (opsiyonel). */
   readonly checkers?: CheckerRegistry
 }
@@ -94,21 +98,21 @@ export const createReview = async (
   // veriyorsa gate'i bloklar (merge engellenir).
   const delta = previousScore === null ? null : baseOutcome.coverage.score - previousScore
   const policy = config.gatePolicy
-  const regressed =
-    delta !== null && policy.blockOnRegression && delta <= -policy.regressionThreshold
+  const isRegression = delta !== null && delta <= -policy.regressionThreshold
 
-  const outcome: ReviewOutcome = regressed
-    ? {
-        ...baseOutcome,
-        gate: {
-          passed: false,
-          reasons: [
-            ...baseOutcome.gate.reasons,
-            `Coverage regresyonu: skor ${delta.toFixed(1)} puan düştü (eşik ${policy.regressionThreshold})`
-          ]
+  const outcome: ReviewOutcome =
+    isRegression && policy.blockOnRegression
+      ? {
+          ...baseOutcome,
+          gate: {
+            passed: false,
+            reasons: [
+              ...baseOutcome.gate.reasons,
+              `Coverage regresyonu: skor ${(delta as number).toFixed(1)} puan düştü (eşik ${policy.regressionThreshold})`
+            ]
+          }
         }
-      }
-    : baseOutcome
+      : baseOutcome
 
   const reviewId = await deps.saveReview({
     projectId: project.id,
@@ -116,6 +120,20 @@ export const createReview = async (
     codeHash: request.codeHash,
     outcome,
     delta
+  })
+
+  // Bildirimleri ateşle-unut: review yanıtını bloklamaz.
+  deps.notify?.({
+    projectId: project.id,
+    projectKey: request.projectKey,
+    kind: request.input.kind,
+    reviewId,
+    score: outcome.coverage.score,
+    level: outcome.coverage.level,
+    delta,
+    gatePassed: outcome.gate.passed,
+    regressed: isRegression,
+    reasons: outcome.gate.reasons
   })
 
   return { ...outcome, reviewId, delta }
