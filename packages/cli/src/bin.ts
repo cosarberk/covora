@@ -18,16 +18,18 @@ program
   .description('Kaynak dosyaları code review sunucusuna gönderir ve gate kararını uygular')
   .requiredOption('--server <url>', 'Covora sunucu adresi')
   .requiredOption('--project <key>', 'Proje anahtarı')
+  .requiredOption('--token <token>', 'Projenin ingest token değeri (studio > proje)')
   .requiredOption('--code-hash <hash>', 'Review edilen kodun hash değeri')
   .argument('<files...>', 'Review edilecek dosya yolları')
   .action(
     async (
       files: string[],
-      options: { server: string; project: string; codeHash: string }
+      options: { server: string; project: string; token: string; codeHash: string }
     ): Promise<void> => {
       const exitCode = await runReviewCommand({
         server: options.server,
         project: options.project,
+        token: options.token,
         codeHash: options.codeHash,
         files
       })

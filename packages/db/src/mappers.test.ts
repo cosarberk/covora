@@ -11,7 +11,7 @@ import { toCoverageConfig, toDomainRule, toGatePolicy } from './mappers.js'
 
 const prismaRule: PrismaRule = {
   id: 'cuid-1',
-  projectId: null,
+  packId: 'pack-1',
   key: 'r-key',
   title: 'Başlık',
   description: 'Açıklama',
@@ -34,7 +34,9 @@ const prismaConfig: PrismaProjectConfig = {
     { id: 'poor', minScore: 0 }
   ],
   gateMinScore: 60,
-  gateBlockOnFailedBlockers: true
+  gateBlockOnFailedBlockers: true,
+  gateBlockOnRegression: false,
+  regressionThreshold: 5
 }
 
 describe('toDomainRule', () => {

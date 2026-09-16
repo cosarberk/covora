@@ -36,21 +36,73 @@ enum ChecklistOutcome {
 
 /// Review edilen bir birim (plugin / repo).
 model Project {
-  id        String         @id @default(cuid())
-  key       String         @unique
-  name      String
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  rules     Rule[]
-  reviews   Review[]
-  config    ProjectConfig?
+  id          String         @id @default(cuid())
+  key         String         @unique
+  name        String
+  /// Makine istemcilerinin (pipeline CLI / SDK) review göndermek için kullandığı gizli token.
+  ingestToken String         @unique @default(cuid())
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  packs       ProjectPack[]
+  reviews     Review[]
+  config      ProjectConfig?
+  webhooks    Webhook[]
 }
 
-/// Tek bir review kuralı. `projectId` null ise global (varsayılan) kuraldır.
+/// Bir projeye ait bildirim webhook'u. Seçilen olaylarda hedef URL'ye POST atılır.
+model Webhook {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  url       String
+  events    String[]
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+/// Studio kullanıcısı. Kimlik doğrulama (JWT) için.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         String   @default("admin")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// Review Pack: bir kural koleksiyonu (tür: ui/code). Projeler pack'lere abone olur.
+model Pack {
+  id          String        @id @default(cuid())
+  key         String        @unique
+  name        String
+  description String        @default("")
+  kind        ReviewKind
+  builtin     Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  rules       Rule[]
+  projects    ProjectPack[]
+}
+
+/// Proje ↔ Pack aboneliği (çoktan-çoğa).
+model ProjectPack {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  packId    String
+  pack      Pack    @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, packId])
+}
+
+/// Tek bir review kuralı. Bir pack'e aittir.
 model Rule {
   id          String         @id @default(cuid())
-  projectId   String?
-  project     Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  packId      String
+  pack        Pack           @relation(fields: [packId], references: [id], onDelete: Cascade)
   key         String
   title       String
   description String         @default("")
@@ -64,7 +116,7 @@ model Rule {
   updatedAt   DateTime       @updatedAt
   audits      RuleAudit[]
 
-  @@unique([projectId, key])
+  @@unique([packId, key])
   @@index([kind, enabled])
 }
 
@@ -91,6 +143,8 @@ model Review {
   score      Float
   level      String
   gatePassed Boolean
+  /// Bir önceki aynı tür review'a göre skor farkı (ilk review'da null).
+  delta      Float?
   createdAt  DateTime       @default(now())
   results    ReviewResult[]
 
@@ -132,4 +186,6 @@ model ProjectConfig {
   levels                    Json
   gateMinScore              Float   @default(60)
   gateBlockOnFailedBlockers Boolean @default(true)
+  gateBlockOnRegression     Boolean @default(false)
+  regressionThreshold       Float   @default(5)
 }

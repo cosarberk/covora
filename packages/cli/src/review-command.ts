@@ -16,6 +16,8 @@ export interface ReviewCommandOptions {
   readonly server: string
   /** Proje anahtarı. */
   readonly project: string
+  /** Projenin ingest token'ı (studio'dan alınır). */
+  readonly token: string
   /** Review edilen kodun hash'i. */
   readonly codeHash: string
   /** Review edilecek dosya yolları. */
@@ -24,6 +26,7 @@ export interface ReviewCommandOptions {
 
 interface CreateReviewResponse extends ReviewOutcome {
   readonly reviewId: string
+  readonly delta: number | null
 }
 
 /** Çıkış kodları: 0 geçti, 1 gate kaldı, 2 çalıştırma hatası. */
@@ -57,7 +60,7 @@ export const runReviewCommand = async (
 
   const response = await fetch(`${options.server}/reviews`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-covora-token': options.token },
     body: JSON.stringify({
       projectKey: options.project,
       codeHash: options.codeHash,
@@ -72,6 +75,10 @@ export const runReviewCommand = async (
 
   const outcome = (await response.json()) as CreateReviewResponse
   log(`Coverage: ${outcome.coverage.score.toFixed(1)} (${outcome.coverage.level})`)
+  if (typeof outcome.delta === 'number') {
+    const sign = outcome.delta >= 0 ? '+' : ''
+    log(`Önceki review'a göre: ${sign}${outcome.delta.toFixed(1)} puan`)
+  }
   log(`Gate: ${outcome.gate.passed ? 'GEÇTİ' : 'KALDI'}`)
 
   if (!outcome.gate.passed) {

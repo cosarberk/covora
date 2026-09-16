@@ -9,6 +9,8 @@ import { runReview, type CheckerRegistry, type LlmProvider } from '@covora/core'
 import type { EffectiveConfig, SaveReviewInput } from '@covora/db'
 import type { ReviewInput, ReviewKind, ReviewOutcome, Rule } from '@covora/types'
 
+import type { ReviewNotification } from './notifications.js'
+
 /** Proje bulunamadığında fırlatılır. */
 export class ProjectNotFoundError extends Error {
   public constructor(public readonly projectKey: string) {
@@ -27,8 +29,12 @@ export interface CreateReviewDeps {
   readonly getEffectiveConfig: (projectId: string) => Promise<EffectiveConfig>
   /** Review türüne göre sağlayıcı üretir (DB'deki aktif sağlayıcı, yoksa env). */
   readonly createProvider: (kind: ReviewKind) => Promise<LlmProvider>
+  /** Aynı tür için son review skorunu getirir (regresyon karşılaştırması). */
+  readonly getLatestScore: (projectId: string, kind: ReviewKind) => Promise<number | null>
   /** Review sonucunu kaydeder ve kimliğini döner. */
   readonly saveReview: (input: SaveReviewInput) => Promise<string>
+  /** Review tamamlandığında bildirim tetikler (ateşle-unut; opsiyonel). */
+  readonly notify?: (payload: ReviewNotification) => void
   /** Deterministik kurallar için checker kaydı (opsiyonel). */
   readonly checkers?: CheckerRegistry
 }
@@ -47,6 +53,8 @@ export interface CreateReviewRequest {
 export interface CreateReviewResult extends ReviewOutcome {
   /** Kaydedilen review kimliği. */
   readonly reviewId: string
+  /** Önceki aynı tür review'a göre skor farkı (ilk review'da null). */
+  readonly delta: number | null
 }
 
 /**
@@ -74,21 +82,59 @@ export const createReview = async (
 
   const provider = await deps.createProvider(request.input.kind)
 
-  const outcome = await runReview({
-    rules,
-    input: request.input,
-    provider,
-    config: config.coverageConfig,
-    policy: config.gatePolicy,
-    ...(deps.checkers !== undefined ? { checkers: deps.checkers } : {})
-  })
+  const [baseOutcome, previousScore] = await Promise.all([
+    runReview({
+      rules,
+      input: request.input,
+      provider,
+      config: config.coverageConfig,
+      policy: config.gatePolicy,
+      ...(deps.checkers !== undefined ? { checkers: deps.checkers } : {})
+    }),
+    deps.getLatestScore(project.id, request.input.kind)
+  ])
+
+  // Regresyon: önceki aynı tür review'a göre skor düşüşü. Politika izin
+  // veriyorsa gate'i bloklar (merge engellenir).
+  const delta = previousScore === null ? null : baseOutcome.coverage.score - previousScore
+  const policy = config.gatePolicy
+  const isRegression = delta !== null && delta <= -policy.regressionThreshold
+
+  const outcome: ReviewOutcome =
+    isRegression && policy.blockOnRegression
+      ? {
+          ...baseOutcome,
+          gate: {
+            passed: false,
+            reasons: [
+              ...baseOutcome.gate.reasons,
+              `Coverage regresyonu: skor ${(delta as number).toFixed(1)} puan düştü (eşik ${policy.regressionThreshold})`
+            ]
+          }
+        }
+      : baseOutcome
 
   const reviewId = await deps.saveReview({
     projectId: project.id,
     kind: request.input.kind,
     codeHash: request.codeHash,
-    outcome
+    outcome,
+    delta
   })
 
-  return { ...outcome, reviewId }
+  // Bildirimleri ateşle-unut: review yanıtını bloklamaz.
+  deps.notify?.({
+    projectId: project.id,
+    projectKey: request.projectKey,
+    kind: request.input.kind,
+    reviewId,
+    score: outcome.coverage.score,
+    level: outcome.coverage.level,
+    delta,
+    gatePassed: outcome.gate.passed,
+    regressed: isRegression,
+    reasons: outcome.gate.reasons
+  })
+
+  return { ...outcome, reviewId, delta }
 }

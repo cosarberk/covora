@@ -6,18 +6,26 @@
 
 import {
   coverageConfigSchema,
+  userRoleSchema,
+  webhookEventSchema,
   type AuditRecord,
   type CoverageConfig,
   type GatePolicy,
   type ManagementRule,
+  type Pack,
   type ProviderConfig,
-  type Rule
+  type Rule,
+  type User,
+  type Webhook
 } from '@covora/types'
 import type {
+  Pack as PrismaPack,
   ProjectConfig as PrismaProjectConfig,
   ProviderConfig as PrismaProviderConfig,
   RuleAudit as PrismaRuleAudit,
-  Rule as PrismaRule
+  Rule as PrismaRule,
+  User as PrismaUser,
+  Webhook as PrismaWebhook
 } from '@prisma/client'
 
 /**
@@ -54,7 +62,23 @@ export const toManagementRule = (rule: PrismaRule): ManagementRule => ({
   evaluation: rule.evaluation,
   severity: rule.severity,
   weight: rule.weight,
-  enabled: rule.enabled
+  enabled: rule.enabled,
+  packId: rule.packId
+})
+
+/**
+ * Prisma pack kaydını domain modeline dönüştürür.
+ *
+ * @param pack - Prisma pack kaydı.
+ * @returns {@link Pack}.
+ */
+export const toPack = (pack: PrismaPack): Pack => ({
+  id: pack.id,
+  key: pack.key,
+  name: pack.name,
+  description: pack.description,
+  kind: pack.kind,
+  builtin: pack.builtin
 })
 
 /**
@@ -78,7 +102,9 @@ export const toCoverageConfig = (config: PrismaProjectConfig): CoverageConfig =>
  */
 export const toGatePolicy = (config: PrismaProjectConfig): GatePolicy => ({
   minScore: config.gateMinScore,
-  blockOnFailedBlockers: config.gateBlockOnFailedBlockers
+  blockOnFailedBlockers: config.gateBlockOnFailedBlockers,
+  blockOnRegression: config.gateBlockOnRegression,
+  regressionThreshold: config.regressionThreshold
 })
 
 /**
@@ -100,6 +126,35 @@ export const toProviderConfig = (provider: PrismaProviderConfig): ProviderConfig
   baseUrl: provider.baseUrl,
   model: provider.model,
   active: provider.active
+})
+
+/**
+ * Prisma kullanıcısını domain modeline dönüştürür. Parola hash'i çıkarılmaz.
+ *
+ * @param user - Prisma kullanıcı kaydı.
+ * @returns {@link User}.
+ */
+export const toUser = (user: PrismaUser): User => ({
+  id: user.id,
+  email: user.email,
+  role: userRoleSchema.catch('admin').parse(user.role)
+})
+
+/**
+ * Prisma webhook kaydını domain modeline dönüştürür. Geçersiz olay adları
+ * ayıklanır.
+ *
+ * @param webhook - Prisma webhook kaydı.
+ * @returns {@link Webhook}.
+ */
+export const toWebhook = (webhook: PrismaWebhook): Webhook => ({
+  id: webhook.id,
+  url: webhook.url,
+  events: webhook.events.flatMap((event) => {
+    const parsed = webhookEventSchema.safeParse(event)
+    return parsed.success ? [parsed.data] : []
+  }),
+  active: webhook.active
 })
 
 export const toAuditRecord = (audit: PrismaRuleAudit): AuditRecord => ({

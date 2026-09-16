@@ -8,7 +8,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createCovoraClient } from './client.js'
 
-const config = { serverUrl: 'http://localhost:4000', projectKey: 'my-plugin' }
+const config = {
+  serverUrl: 'http://localhost:4000',
+  projectKey: 'my-plugin',
+  ingestToken: 'ingest-token-1'
+}
 
 const okResponse = { reviewId: 'r1', coverage: { score: 80 }, gate: { passed: true } }
 

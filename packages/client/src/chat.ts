@@ -14,6 +14,10 @@ import { captureScreenshot } from './capture.js'
 export interface CovoraChatConfig {
   /** Review sunucusunun temel adresi. */
   readonly serverUrl: string
+  /** Review edilen projenin anahtarı. */
+  readonly projectKey: string
+  /** Projenin ingest token'ı (studio'dan alınır). */
+  readonly ingestToken: string
 }
 
 /** İnteraktif sohbet istemcisi. */
@@ -44,8 +48,8 @@ export const createCovoraChat = (config: CovoraChatConfig): CovoraChat => {
   const ask = async (messages: readonly ChatMessage[]): Promise<string> => {
     const response = await fetch(`${config.serverUrl}/chat`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ messages })
+      headers: { 'content-type': 'application/json', 'x-covora-token': config.ingestToken },
+      body: JSON.stringify({ projectKey: config.projectKey, messages })
     })
     if (!response.ok) {
       throw new Error(`Sohbet isteği başarısız: ${response.status} ${response.statusText}`)

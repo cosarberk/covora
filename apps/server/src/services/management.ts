@@ -5,14 +5,24 @@
  * Bağımlılıklar dışarıdan enjekte edilir.
  */
 
-import type { CreateRuleData, ProviderInput } from '@covora/db'
+import type {
+  CreateRuleData,
+  CreateWebhookData,
+  EffectiveConfig,
+  PackInput,
+  ProjectConfigInput,
+  ProviderInput
+} from '@covora/db'
 import type {
   AuditRecord,
+  DashboardSummary,
   ManagementRule,
+  Pack,
   ProviderConfig,
   ReviewKind,
   Rule,
-  Severity
+  Severity,
+  Webhook
 } from '@covora/types'
 
 /** Bir kural güncellemesinde değiştirilebilir alanlar. */
@@ -30,6 +40,8 @@ export interface ProjectRecord {
   readonly id: string
   readonly key: string
   readonly name: string
+  /** Makine istemcilerinin review göndermek için kullandığı gizli token. */
+  readonly ingestToken: string
 }
 
 /** Review geçmişi okuma modeli (sonuç ayrıntısı olmadan özet). */
@@ -40,6 +52,8 @@ export interface ReviewRecord {
   readonly score: number
   readonly level: string
   readonly gatePassed: boolean
+  /** Önceki aynı tür review'a göre skor farkı (ilk review'da null). */
+  readonly delta: number | null
   readonly createdAt: string
 }
 
@@ -53,8 +67,22 @@ export interface ManagementDeps {
   readonly listProjects: () => Promise<readonly ProjectRecord[]>
   /** Bir projeyi anahtarına göre siler. */
   readonly deleteProject: (key: string) => Promise<void>
-  /** Projenin (ve global) tüm kurallarını yönetim modeli olarak getirir. */
+  /** Projenin abone olduğu pack'lerdeki tüm kuralları yönetim modeli olarak getirir. */
   readonly listRules: (projectId: string) => Promise<readonly ManagementRule[]>
+  /** Tüm pack'leri listeler. */
+  readonly listPacks: () => Promise<readonly Pack[]>
+  /** Projenin abone olduğu pack'leri listeler. */
+  readonly listPacksByProject: (projectId: string) => Promise<readonly Pack[]>
+  /** Yeni pack oluşturur. */
+  readonly createPack: (input: PackInput) => Promise<Pack>
+  /** Bir pack'i siler (yerleşik olmayanlar). */
+  readonly deletePack: (id: string) => Promise<void>
+  /** Bir projeyi bir pack'e abone eder. */
+  readonly assignPackToProject: (projectId: string, packId: string) => Promise<void>
+  /** Bir projenin bir pack aboneliğini kaldırır. */
+  readonly removePackFromProject: (projectId: string, packId: string) => Promise<void>
+  /** Bir pack'in kurallarını yönetim modeli olarak getirir. */
+  readonly listRulesByPack: (packId: string) => Promise<readonly ManagementRule[]>
   /** Yeni kural oluşturur (audit'li). */
   readonly createRule: (data: CreateRuleData, changedBy: string) => Promise<Rule>
   /** Kuralı günceller (audit'li). */
@@ -71,4 +99,21 @@ export interface ManagementDeps {
   readonly deleteProvider: (id: string) => Promise<void>
   /** Projenin son review'larını getirir. */
   readonly listRecentReviews: (projectId: string, limit?: number) => Promise<readonly ReviewRecord[]>
+  /** Tüm projeler genelinde genel bakış özetini getirir. */
+  readonly getDashboard: () => Promise<DashboardSummary>
+  /** Projenin bildirim webhook'larını listeler. */
+  readonly listWebhooks: (projectId: string) => Promise<readonly Webhook[]>
+  /** Yeni webhook oluşturur. */
+  readonly createWebhook: (data: CreateWebhookData) => Promise<Webhook>
+  /** Bir webhook'un etkinlik durumunu değiştirir. */
+  readonly setWebhookActive: (id: string, active: boolean) => Promise<void>
+  /** Bir webhook'u siler. */
+  readonly deleteWebhook: (id: string) => Promise<void>
+  /** Projenin etkin yapılandırmasını (coverage + gate) getirir. */
+  readonly getProjectConfig: (projectId: string) => Promise<EffectiveConfig>
+  /** Projenin yapılandırmasını günceller. */
+  readonly updateProjectConfig: (
+    projectId: string,
+    input: ProjectConfigInput
+  ) => Promise<EffectiveConfig>
 }

@@ -1,7 +1,8 @@
 /**
  * @module @covora/db/repositories/rule
  *
- * Kural veri erişimi. Değişiklikler audit kaydıyla birlikte yazılır.
+ * Kural veri erişimi. Kurallar bir pack'e aittir; projeler pack'lere abone
+ * olur. Değişiklikler audit kaydıyla birlikte yazılır.
  */
 
 import type {
@@ -18,8 +19,8 @@ import { toAuditRecord, toDomainRule, toManagementRule } from '../mappers.js'
 
 /** Yeni bir kural oluşturmak için gerekli alanlar. */
 export interface CreateRuleData {
-  /** Bağlı proje kimliği; null ise global kural. */
-  readonly projectId?: string | null
+  /** Kuralın ait olduğu pack. */
+  readonly packId: string
   /** Kararlı kural anahtarı (domain kimliği). */
   readonly key: string
   /** Kural başlığı. */
@@ -41,7 +42,8 @@ export interface CreateRuleData {
 }
 
 /**
- * Bir projenin (ve global) etkin kurallarını verilen review türü için getirir.
+ * Bir projenin abone olduğu pack'lerdeki etkin kuralları, verilen review türü
+ * için getirir (coverage/review'da kullanılır).
  *
  * @param prisma - Prisma client.
  * @param projectId - Proje kimliği.
@@ -57,30 +59,15 @@ export const listEnabledRules = async (
     where: {
       enabled: true,
       kind,
-      OR: [{ projectId }, { projectId: null }]
+      pack: { projects: { some: { projectId } } }
     }
   })
   return rules.map(toDomainRule)
 }
 
 /**
- * Bir projenin (ve global) tüm kurallarını getirir (etkin olmayanlar dahil).
- *
- * @param prisma - Prisma client.
- * @param projectId - Proje kimliği.
- * @returns Domain kural listesi.
- */
-export const listRules = async (prisma: PrismaClient, projectId: string): Promise<Rule[]> => {
-  const rules = await prisma.rule.findMany({
-    where: { OR: [{ projectId }, { projectId: null }] },
-    orderBy: { key: 'asc' }
-  })
-  return rules.map(toDomainRule)
-}
-
-/**
- * Bir projenin (ve global) tüm kurallarını yönetim modeli olarak getirir
- * (kalıcılık kimliği ve `enabled` dahil).
+ * Bir projenin abone olduğu pack'lerdeki tüm kuralları yönetim modeli olarak
+ * getirir (görüntüleme).
  *
  * @param prisma - Prisma client.
  * @param projectId - Proje kimliği.
@@ -91,17 +78,32 @@ export const listManagementRules = async (
   projectId: string
 ): Promise<ManagementRule[]> => {
   const rules = await prisma.rule.findMany({
-    where: { OR: [{ projectId }, { projectId: null }] },
+    where: { pack: { projects: { some: { projectId } } } },
     orderBy: { key: 'asc' }
   })
   return rules.map(toManagementRule)
 }
 
 /**
- * Yeni bir kural oluşturur ve audit kaydını yazar.
+ * Bir pack'in tüm kurallarını yönetim modeli olarak getirir.
  *
  * @param prisma - Prisma client.
- * @param data - Kural alanları.
+ * @param packId - Pack kimliği.
+ * @returns Yönetim kural listesi.
+ */
+export const listRulesByPack = async (
+  prisma: PrismaClient,
+  packId: string
+): Promise<ManagementRule[]> => {
+  const rules = await prisma.rule.findMany({ where: { packId }, orderBy: { key: 'asc' } })
+  return rules.map(toManagementRule)
+}
+
+/**
+ * Bir pack'e yeni kural ekler ve audit kaydını yazar.
+ *
+ * @param prisma - Prisma client.
+ * @param data - Kural alanları (packId dahil).
  * @param changedBy - İşlemi yapan kullanıcı.
  * @returns Oluşturulan domain kural.
  */
@@ -112,7 +114,7 @@ export const createRule = async (
 ): Promise<Rule> => {
   const created = await prisma.rule.create({
     data: {
-      projectId: data.projectId ?? null,
+      packId: data.packId,
       key: data.key,
       title: data.title,
       description: data.description ?? '',
@@ -138,14 +140,6 @@ export const createRule = async (
 }
 
 /**
- * Bir kuralı günceller ve değişikliği audit kaydıyla işler (tek transaction).
- *
- * @param prisma - Prisma client.
- * @param ruleId - Güncellenecek kuralın kimliği (Prisma id).
- * @param changes - Uygulanacak değişiklikler.
- * @param changedBy - İşlemi yapan kullanıcı.
- */
-/**
  * Bir kuralın audit kayıtlarını (yeniden eskiye) getirir.
  *
  * @param prisma - Prisma client.
@@ -163,6 +157,14 @@ export const listRuleAudits = async (
   return audits.map(toAuditRecord)
 }
 
+/**
+ * Bir kuralı günceller ve değişikliği audit kaydıyla işler (tek transaction).
+ *
+ * @param prisma - Prisma client.
+ * @param ruleId - Kural kimliği.
+ * @param changes - Uygulanacak değişiklikler.
+ * @param changedBy - İşlemi yapan kullanıcı.
+ */
 export const updateRuleWithAudit = async (
   prisma: PrismaClient,
   ruleId: string,
