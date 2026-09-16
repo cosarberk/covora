@@ -48,18 +48,19 @@ export const buildApp = (deps: AppDeps): FastifyInstance => {
   registerHealthRoutes(app)
   registerAuthRoutes(app, deps.authDeps)
 
-  // Review ingest: proje bazlı token ile korunur (makine istemcileri).
+  // Review ingest ve interaktif sohbet: proje bazlı token ile korunur
+  // (mock-shell SDK / pipeline gibi makine istemcileri; kullanıcı JWT'si yok).
   void app.register(async (scope) => {
     scope.addHook('preHandler', makeIngestGuard(deps.ingestDeps))
     registerReviewRoutes(scope, deps.reviewDeps)
+    registerChatRoutes(scope, deps.chatDeps)
   })
 
-  // Yönetim ve sohbet: kullanıcı JWT'si ile korunur (studio).
+  // Yönetim: kullanıcı JWT'si ile korunur (studio).
   void app.register(async (scope) => {
     scope.addHook('preHandler', makeUserGuard(deps.authDeps.secret))
     scope.get('/auth/me', async (request) => ({ user: request.user ?? null }))
     registerManagementRoutes(scope, deps.managementDeps)
-    registerChatRoutes(scope, deps.chatDeps)
   })
 
   // Studio (React) statik dosyalarını aynı sunucudan serve et (tek image).

@@ -31,9 +31,36 @@ Bu tek komut şunları yapar:
 1. Postgres'i kalıcı diskle ayağa kaldırır.
 2. Ollama'yı kurar; hazır olunca `qwen3-vl:8b` ve `qwen3-coder:7b` modellerini
    **otomatik indirir** (idempotent; model PVC'de kalıcı).
-3. Şemayı DB'ye uygular (post-install Job, `prisma db push`).
+3. Şemayı DB'ye uygular (post-install/upgrade Job, `prisma db push --accept-data-loss`).
 4. Covora'yı (Fastify API + gömülü studio) ayağa kaldırır — tek servis,
-   studio ve API aynı porttan (same-origin, URL derdi yok).
+   studio ve API aynı porttan (same-origin, URL derdi yok). Açılışta yerleşik
+   review paketlerini ve (env verildiyse) admin kullanıcıyı seed eder.
+
+## Kimlik doğrulama (ZORUNLU)
+
+Studio giriş gerektirir; yönetim uçları kullanıcı JWT'siyle korunur. Kurulumda
+şu değerleri verin (üretimde secret'ı MUTLAKA değiştirin):
+
+```bash
+helm install covora deploy/helm/covora --namespace covora --create-namespace \
+  --set auth.secret=<en-az-16-karakter-gizli> \
+  --set auth.adminEmail=admin@ornek.com \
+  --set auth.adminPassword=<guclu-parola>
+```
+
+Admin kullanıcı yalnızca hiç kullanıcı yokken (ilk kurulum) seed edilir.
+
+### Pipeline / SDK ingest token
+
+Review göndermek (pipeline CLI, mock-shell SDK) artık **proje bazlı ingest
+token** ister. Token studio'da proje seçilince başlıkta gösterilir. Kullanım:
+
+```bash
+covora review --server https://covora.host --project <key> \
+  --token <ingest-token> --code-hash <hash> src/**/*.ts
+```
+
+SDK'da `createCovoraClient({ serverUrl, projectKey, ingestToken })`.
 
 ## Doğrula
 

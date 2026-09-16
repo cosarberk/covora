@@ -15,6 +15,8 @@ export default defineConfig({
       '/packs': apiProxy,
       '/providers': apiProxy,
       '/rules': apiProxy,
+      '/webhooks': apiProxy,
+      '/dashboard': apiProxy,
       '/chat': apiProxy,
       '/health': apiProxy
     }
