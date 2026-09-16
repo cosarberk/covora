@@ -10,6 +10,7 @@ import type { User } from '@covora/types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { createStudioApi, type ProjectSummary } from './api/client.js'
+import { DashboardPanel } from './components/DashboardPanel.js'
 import { Login } from './components/Login.js'
 import { PacksPanel } from './components/PacksPanel.js'
 import { ProjectPacksPanel } from './components/ProjectPacksPanel.js'
@@ -22,7 +23,7 @@ const serverUrl = import.meta.env.VITE_COVORA_SERVER_URL ?? ''
 const api = createStudioApi({ baseUrl: serverUrl })
 
 type Tab = 'packs' | 'rules' | 'reviews'
-type View = 'project' | 'providers' | 'packs'
+type View = 'dashboard' | 'project' | 'providers' | 'packs'
 
 /** Studio uygulaması. */
 export const App = (): React.JSX.Element => {
@@ -30,7 +31,7 @@ export const App = (): React.JSX.Element => {
   const [authReady, setAuthReady] = useState(false)
   const [projects, setProjects] = useState<readonly ProjectSummary[]>([])
   const [selected, setSelected] = useState<string | null>(null)
-  const [view, setView] = useState<View>('project')
+  const [view, setView] = useState<View>('dashboard')
   const [tab, setTab] = useState<Tab>('packs')
   const [error, setError] = useState<string | null>(null)
   const [newKey, setNewKey] = useState('')
@@ -151,6 +152,13 @@ export const App = (): React.JSX.Element => {
 
       <div className="layout">
         <aside className="sidebar">
+          <button
+            type="button"
+            className={view === 'dashboard' ? 'nav-item nav-item--active' : 'nav-item'}
+            onClick={() => setView('dashboard')}
+          >
+            📊 Genel Bakış
+          </button>
           <div className="sidebar__title">Projeler</div>
           <ul className="project-list">
             {projects.map((project) => (
@@ -219,7 +227,15 @@ export const App = (): React.JSX.Element => {
         <main className="main">
           {error !== null && <div className="state state--error">{error}</div>}
 
-          {view === 'providers' ? (
+          {view === 'dashboard' ? (
+            <DashboardPanel
+              api={api}
+              onOpenProject={(key) => {
+                setSelected(key)
+                setView('project')
+              }}
+            />
+          ) : view === 'providers' ? (
             <ProvidersPanel api={api} />
           ) : view === 'packs' ? (
             <PacksPanel api={api} />

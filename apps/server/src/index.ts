@@ -23,6 +23,7 @@ import {
   findProjectByKey,
   findUserByEmail,
   getActiveProvider,
+  getDashboardSummary,
   getEffectiveConfig,
   listEnabledRules,
   listManagementRules,
@@ -130,6 +131,7 @@ const start = async (): Promise<void> => {
         gatePassed: review.gatePassed,
         createdAt: review.createdAt.toISOString()
       })),
+    getDashboard: () => getDashboardSummary(prisma),
     listProviders: () => listProviders(prisma),
     createProvider: (input) => createProviderRecord(prisma, input),
     setActiveProvider: (id) => setActiveProvider(prisma, id),

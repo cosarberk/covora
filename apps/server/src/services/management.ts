@@ -8,6 +8,7 @@
 import type { CreateRuleData, PackInput, ProviderInput } from '@covora/db'
 import type {
   AuditRecord,
+  DashboardSummary,
   ManagementRule,
   Pack,
   ProviderConfig,
@@ -88,4 +89,6 @@ export interface ManagementDeps {
   readonly deleteProvider: (id: string) => Promise<void>
   /** Projenin son review'larını getirir. */
   readonly listRecentReviews: (projectId: string, limit?: number) => Promise<readonly ReviewRecord[]>
+  /** Tüm projeler genelinde genel bakış özetini getirir. */
+  readonly getDashboard: () => Promise<DashboardSummary>
 }

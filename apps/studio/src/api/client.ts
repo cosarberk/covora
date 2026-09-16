@@ -8,6 +8,7 @@
 
 import type {
   AuditRecord,
+  DashboardSummary,
   ManagementRule,
   Pack,
   ProviderConfig,
@@ -93,6 +94,7 @@ export interface StudioApi {
   logout(): void
   /** Mevcut kullanıcıyı doğrular. */
   me(): Promise<User>
+  getDashboard(): Promise<DashboardSummary>
   listProjects(): Promise<readonly ProjectSummary[]>
   deleteProject(key: string): Promise<void>
   listProviders(): Promise<readonly ProviderConfig[]>
@@ -215,6 +217,10 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
     async me() {
       const data = await json<{ user: User }>(await authFetch('/auth/me'))
       return data.user
+    },
+
+    async getDashboard() {
+      return json<DashboardSummary>(await authFetch('/dashboard'))
     },
 
     async listProjects() {
