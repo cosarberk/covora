@@ -2,5 +2,5 @@ apiVersion: v2
 name: covora
 description: Covora — self-hosted kural tabanlı UI & code review platformu
 type: application
-version: 1.0.4
+version: 1.0.5
 appVersion: 'latest'
