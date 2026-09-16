@@ -10,10 +10,12 @@ import { createOllamaChat } from '@covora/provider-ollama'
 import {
   createPrismaClient,
   createRule,
+  deleteProjectByKey,
   findProjectByKey,
   getEffectiveConfig,
   listEnabledRules,
   listManagementRules,
+  listProjects,
   listRecentReviews,
   listRuleAudits,
   saveReview,
@@ -48,6 +50,13 @@ const start = async (): Promise<void> => {
   const managementDeps: ManagementDeps = {
     findProjectByKey: (key) => findProjectByKey(prisma, key),
     upsertProject: (key, name) => upsertProject(prisma, key, name),
+    listProjects: async () =>
+      (await listProjects(prisma)).map((project) => ({
+        id: project.id,
+        key: project.key,
+        name: project.name
+      })),
+    deleteProject: (key) => deleteProjectByKey(prisma, key),
     listRules: (projectId) => listManagementRules(prisma, projectId),
     createRule: (data, changedBy) => createRule(prisma, data, changedBy),
     updateRule: (ruleId, patch, changedBy) => updateRuleWithAudit(prisma, ruleId, patch, changedBy),

@@ -42,6 +42,10 @@ export interface ManagementDeps {
   readonly findProjectByKey: (key: string) => Promise<{ readonly id: string } | null>
   /** Projeyi oluşturur ya da adını günceller. */
   readonly upsertProject: (key: string, name: string) => Promise<ProjectRecord>
+  /** Tüm projeleri listeler. */
+  readonly listProjects: () => Promise<readonly ProjectRecord[]>
+  /** Bir projeyi anahtarına göre siler. */
+  readonly deleteProject: (key: string) => Promise<void>
   /** Projenin (ve global) tüm kurallarını yönetim modeli olarak getirir. */
   readonly listRules: (projectId: string) => Promise<readonly ManagementRule[]>
   /** Yeni kural oluşturur (audit'li). */

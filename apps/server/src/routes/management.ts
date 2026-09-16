@@ -65,6 +65,14 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
     return reply.status(201).send(project)
   })
 
+  app.get('/projects', async () => ({ projects: await deps.listProjects() }))
+
+  app.delete('/projects/:key', async (request, reply) => {
+    const { key } = request.params as { key: string }
+    await deps.deleteProject(key)
+    return reply.status(204).send()
+  })
+
   app.get('/projects/:key/rules', async (request, reply) => {
     const { key } = request.params as { key: string }
     const project = await deps.findProjectByKey(key)

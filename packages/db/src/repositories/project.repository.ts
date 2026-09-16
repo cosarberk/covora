@@ -30,3 +30,22 @@ export const upsertProject = async (prisma: PrismaClient, key: string, name: str
     create: { key, name },
     update: { name }
   })
+
+/**
+ * Tüm projeleri anahtar sırasına göre listeler.
+ *
+ * @param prisma - Prisma client.
+ * @returns Proje kayıtları.
+ */
+export const listProjects = async (prisma: PrismaClient) =>
+  prisma.project.findMany({ orderBy: { key: 'asc' } })
+
+/**
+ * Bir projeyi anahtarına göre siler (ilişkili kural/review'lar cascade ile gider).
+ *
+ * @param prisma - Prisma client.
+ * @param key - Proje anahtarı.
+ */
+export const deleteProjectByKey = async (prisma: PrismaClient, key: string): Promise<void> => {
+  await prisma.project.delete({ where: { key } })
+}

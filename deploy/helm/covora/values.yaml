@@ -55,6 +55,8 @@ server:
 # Dış erişim (UI + API aynı host, same-origin). enabled=true + host verildiğinde
 # müşteri Covora'ya bu URL'den erişir.
 ingress:
+  # Ortama bağlı (controller/DNS/TLS) olduğu için varsayılan kapalı;
+  # erişim gerektiğinde enabled=true + host (+ tls) verilir.
   enabled: false
   className: nginx
   host: covora.example.com

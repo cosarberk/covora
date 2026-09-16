@@ -58,6 +58,8 @@ export interface UpdateRuleInput {
 
 /** Studio API arayüzü. */
 export interface StudioApi {
+  listProjects(): Promise<readonly ProjectSummary[]>
+  deleteProject(key: string): Promise<void>
   listRules(projectKey: string): Promise<readonly ManagementRule[]>
   createRule(projectKey: string, input: CreateRuleInput): Promise<Rule>
   updateRule(ruleId: string, patch: UpdateRuleInput): Promise<void>
@@ -91,6 +93,18 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
   const projectPath = (key: string): string => `/projects/${encodeURIComponent(key)}`
 
   return {
+    async listProjects() {
+      const data = await parseJson<{ projects: ProjectSummary[] }>(await fetch(url('/projects')))
+      return data.projects
+    },
+
+    async deleteProject(key) {
+      const response = await fetch(url(`/projects/${encodeURIComponent(key)}`), { method: 'DELETE' })
+      if (!response.ok) {
+        throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
+      }
+    },
+
     async listRules(projectKey) {
       const data = await parseJson<{ rules: ManagementRule[] }>(
         await fetch(url(`${projectPath(projectKey)}/rules`))
