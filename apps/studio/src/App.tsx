@@ -2,8 +2,8 @@
  * @module studio/App
  *
  * Studio kök bileşeni. Giriş yapılmadan içerik gösterilmez. Girişten sonra:
- * solda proje yönetimi (liste/oluştur/sil) + Review Paketleri / AI Sağlayıcılar
- * navigasyonu, sağda seçilen projenin paket/kural/review sekmeleri.
+ * üstte marka + kullanıcı, solda navigasyon (Genel Bakış / Review Paketleri /
+ * AI Sağlayıcılar) ve proje listesi, sağda sayfa başlıklı içerik.
  */
 
 import type { User } from '@covora/types'
@@ -26,6 +26,14 @@ const api = createStudioApi({ baseUrl: serverUrl })
 
 type Tab = 'packs' | 'rules' | 'reviews' | 'webhooks' | 'settings'
 type View = 'dashboard' | 'project' | 'providers' | 'packs'
+
+const PROJECT_TABS: readonly { readonly id: Tab; readonly label: string }[] = [
+  { id: 'packs', label: 'Paketler' },
+  { id: 'rules', label: 'Kurallar' },
+  { id: 'reviews', label: 'Review Geçmişi' },
+  { id: 'webhooks', label: 'Bildirimler' },
+  { id: 'settings', label: 'Ayarlar' }
+]
 
 /** Studio uygulaması. */
 export const App = (): React.JSX.Element => {
@@ -93,6 +101,7 @@ export const App = (): React.JSX.Element => {
       await loadProjects()
       setSelected(key)
       setView('project')
+      setTab('packs')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Bilinmeyen hata')
     }
@@ -106,6 +115,7 @@ export const App = (): React.JSX.Element => {
       await api.deleteProject(key)
       if (selected === key) {
         setSelected(null)
+        setView('dashboard')
       }
       await loadProjects()
     } catch (cause) {
@@ -130,6 +140,12 @@ export const App = (): React.JSX.Element => {
     setProjects([])
   }
 
+  const openProject = (key: string): void => {
+    setSelected(key)
+    setView('project')
+    setTab('packs')
+  }
+
   if (!authReady) {
     return <div className="state state--full">Yükleniyor…</div>
   }
@@ -138,114 +154,145 @@ export const App = (): React.JSX.Element => {
     return <Login api={api} onLogin={(current) => setUser(current)} />
   }
 
+  const navItem = (id: View, icon: string, label: string): React.JSX.Element => (
+    <button
+      type="button"
+      className={view === id ? 'navitem is-active' : 'navitem'}
+      onClick={() => setView(id)}
+    >
+      <span className="navitem__icon">{icon}</span>
+      {label}
+    </button>
+  )
+
   return (
     <div className="app">
-      <header className="header">
-        <h1 className="brand">
-          Covora <span className="brand__accent">Studio</span>
-        </h1>
-        <div className="header__user">
-          <span className="header__email mono">{user.email}</span>
-          <button type="button" className="link-button" onClick={logout}>
+      <header className="topbar">
+        <div className="topbar__brand">
+          Covora <span>Studio</span>
+        </div>
+        <div className="topbar__right">
+          <span className="topbar__user">{user.email}</span>
+          <button type="button" className="btn-secondary" onClick={logout}>
             Çıkış
           </button>
         </div>
       </header>
 
-      <div className="layout">
-        <aside className="sidebar">
-          <button
-            type="button"
-            className={view === 'dashboard' ? 'nav-item nav-item--active' : 'nav-item'}
-            onClick={() => setView('dashboard')}
-          >
-            📊 Genel Bakış
-          </button>
-          <div className="sidebar__title">Projeler</div>
-          <ul className="project-list">
-            {projects.map((project) => (
-              <li
-                key={project.id}
-                className={project.key === selected ? 'project project--active' : 'project'}
-              >
-                <button
-                  type="button"
-                  className="project__select"
-                  onClick={() => {
-                    setSelected(project.key)
-                    setView('project')
-                  }}
-                >
-                  <span className="project__name">{project.name}</span>
-                  <span className="mono project__key">{project.key}</span>
-                </button>
-                <button
-                  type="button"
-                  className="project__del"
-                  title="Sil"
-                  onClick={() => void removeProject(project.key)}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-            {projects.length === 0 && <li className="project-empty">Henüz proje yok</li>}
-          </ul>
+      <div className="shell">
+        <aside className="nav">
+          <div className="nav__section">
+            <div className="nav__label">Genel</div>
+            {navItem('dashboard', '📊', 'Genel Bakış')}
+            {navItem('packs', '📦', 'Review Paketleri')}
+            {navItem('providers', '⚙️', 'AI Sağlayıcılar')}
+          </div>
 
-          <form className="new-project" onSubmit={(event) => void createProject(event)}>
-            <input
-              className="input"
-              placeholder="anahtar (örn. anasayfa-plugin)"
-              value={newKey}
-              onChange={(event) => setNewKey(event.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="ad"
-              value={newName}
-              onChange={(event) => setNewName(event.target.value)}
-            />
-            <button className="button" type="submit">
-              Proje Ekle
-            </button>
-          </form>
+          <div className="nav__section nav__section--grow">
+            <div className="nav__label">Projeler</div>
+            <div className="projects">
+              {projects.map((project) => (
+                <div
+                  key={project.id}
+                  className={
+                    project.key === selected && view === 'project' ? 'proj is-active' : 'proj'
+                  }
+                >
+                  <button type="button" className="proj__btn" onClick={() => openProject(project.key)}>
+                    <span className="proj__name">{project.name}</span>
+                    <span className="proj__key">{project.key}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="proj__del"
+                    title="Sil"
+                    onClick={() => void removeProject(project.key)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              {projects.length === 0 && <div className="proj-empty">Henüz proje yok</div>}
+            </div>
 
-          <button
-            type="button"
-            className={view === 'packs' ? 'nav-item nav-item--active' : 'nav-item'}
-            onClick={() => setView('packs')}
-          >
-            📦 Review Paketleri
-          </button>
-          <button
-            type="button"
-            className={view === 'providers' ? 'nav-item nav-item--active' : 'nav-item'}
-            onClick={() => setView('providers')}
-          >
-            ⚙ AI Sağlayıcılar
-          </button>
+            <form className="addproj" onSubmit={(event) => void createProject(event)}>
+              <input
+                className="input"
+                placeholder="anahtar (örn. anasayfa-plugin)"
+                value={newKey}
+                onChange={(event) => setNewKey(event.target.value)}
+              />
+              <input
+                className="input"
+                placeholder="ad"
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+              />
+              <button className="button" type="submit">
+                + Proje Ekle
+              </button>
+            </form>
+          </div>
         </aside>
 
-        <main className="main">
-          {error !== null && <div className="state state--error">{error}</div>}
+        <main className="content">
+          <div className="page">
+            {error !== null && <div className="state state--error">{error}</div>}
 
-          {view === 'dashboard' ? (
-            <DashboardPanel
-              api={api}
-              onOpenProject={(key) => {
-                setSelected(key)
-                setView('project')
-              }}
-            />
-          ) : view === 'providers' ? (
-            <ProvidersPanel api={api} />
-          ) : view === 'packs' ? (
-            <PacksPanel api={api} />
-          ) : selected === null ? (
-            <div className="state">Soldan bir proje seç ya da yeni proje oluştur.</div>
-          ) : (
-            <>
-              {selectedProject !== null && (
+            {view === 'dashboard' ? (
+              <>
+                <div className="page__head">
+                  <div>
+                    <h1 className="page__title">Genel Bakış</h1>
+                    <p className="page__sub">Tüm projeler genelinde özet ve son review'lar.</p>
+                  </div>
+                </div>
+                <DashboardPanel api={api} onOpenProject={openProject} />
+              </>
+            ) : view === 'packs' ? (
+              <>
+                <div className="page__head">
+                  <div>
+                    <h1 className="page__title">Review Paketleri</h1>
+                    <p className="page__sub">
+                      Kural koleksiyonlarını yönet. Projeler bu paketlere abone olur.
+                    </p>
+                  </div>
+                </div>
+                <PacksPanel api={api} />
+              </>
+            ) : view === 'providers' ? (
+              <>
+                <div className="page__head">
+                  <div>
+                    <h1 className="page__title">AI Sağlayıcılar</h1>
+                    <p className="page__sub">
+                      Ollama uç noktalarını ve modellerini yönet (ui / code için ayrı).
+                    </p>
+                  </div>
+                </div>
+                <ProvidersPanel api={api} />
+              </>
+            ) : selectedProject === null ? (
+              <div className="state">Soldan bir proje seç ya da yeni proje oluştur.</div>
+            ) : (
+              <>
+                <div className="page__head">
+                  <div>
+                    <h1 className="page__title">{selectedProject.name}</h1>
+                    <p className="page__sub mono">{selectedProject.key}</p>
+                  </div>
+                  <div className="page__actions">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => void removeProject(selectedProject.key)}
+                    >
+                      Projeyi Sil
+                    </button>
+                  </div>
+                </div>
+
                 <div className="ingest">
                   <span className="ingest__label">Ingest token</span>
                   <code className="ingest__token mono">{selectedProject.ingestToken}</code>
@@ -254,69 +301,45 @@ export const App = (): React.JSX.Element => {
                     className="link-button"
                     onClick={() => void copyToken(selectedProject.ingestToken)}
                   >
-                    {copied ? 'Kopyalandı' : 'Kopyala'}
+                    {copied ? 'Kopyalandı ✓' : 'Kopyala'}
                   </button>
                   <span className="ingest__hint">
-                    Pipeline / SDK bu token'ı <span className="mono">x-covora-token</span> ile gönderir.
+                    Pipeline / SDK bu token'ı <span className="mono">x-covora-token</span> başlığıyla
+                    gönderir.
                   </span>
                 </div>
-              )}
 
-              <nav className="tabs">
-                <button
-                  type="button"
-                  className={tab === 'packs' ? 'tab tab--active' : 'tab'}
-                  onClick={() => setTab('packs')}
-                >
-                  Paketler
-                </button>
-                <button
-                  type="button"
-                  className={tab === 'rules' ? 'tab tab--active' : 'tab'}
-                  onClick={() => setTab('rules')}
-                >
-                  Kurallar
-                </button>
-                <button
-                  type="button"
-                  className={tab === 'reviews' ? 'tab tab--active' : 'tab'}
-                  onClick={() => setTab('reviews')}
-                >
-                  Review Geçmişi
-                </button>
-                <button
-                  type="button"
-                  className={tab === 'webhooks' ? 'tab tab--active' : 'tab'}
-                  onClick={() => setTab('webhooks')}
-                >
-                  Bildirimler
-                </button>
-                <button
-                  type="button"
-                  className={tab === 'settings' ? 'tab tab--active' : 'tab'}
-                  onClick={() => setTab('settings')}
-                >
-                  Ayarlar
-                </button>
-              </nav>
+                <nav className="tabs">
+                  {PROJECT_TABS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={tab === item.id ? 'tab tab--active' : 'tab'}
+                      onClick={() => setTab(item.id)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </nav>
 
-              {tab === 'packs' ? (
-                <ProjectPacksPanel api={api} projectKey={selected} />
-              ) : tab === 'rules' ? (
-                <RulesPanel
-                  api={api}
-                  loadRules={loadProjectRules}
-                  emptyLabel="Bu proje bir pack'e abone değil ya da abone pack'lerde kural yok."
-                />
-              ) : tab === 'reviews' ? (
-                <ReviewsPanel api={api} projectKey={selected} />
-              ) : tab === 'webhooks' ? (
-                <WebhooksPanel api={api} projectKey={selected} />
-              ) : (
-                <SettingsPanel api={api} projectKey={selected} />
-              )}
-            </>
-          )}
+                {tab === 'packs' ? (
+                  <ProjectPacksPanel api={api} projectKey={selected as string} />
+                ) : tab === 'rules' ? (
+                  <RulesPanel
+                    api={api}
+                    loadRules={loadProjectRules}
+                    emptyLabel="Bu proje bir pack'e abone değil ya da abone pack'lerde kural yok."
+                  />
+                ) : tab === 'reviews' ? (
+                  <ReviewsPanel api={api} projectKey={selected as string} />
+                ) : tab === 'webhooks' ? (
+                  <WebhooksPanel api={api} projectKey={selected as string} />
+                ) : (
+                  <SettingsPanel api={api} projectKey={selected as string} />
+                )}
+              </>
+            )}
+          </div>
         </main>
       </div>
     </div>
