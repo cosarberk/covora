@@ -35,7 +35,7 @@ const buildDeps = (): CreateReviewDeps => ({
     coverageConfig: defaultCoverageConfig,
     gatePolicy: defaultGatePolicy
   })),
-  createProvider: vi.fn(() => passingProvider),
+  createProvider: vi.fn(async () => passingProvider),
   saveReview: vi.fn(async () => 'review-1')
 })
 

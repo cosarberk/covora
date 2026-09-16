@@ -109,6 +109,20 @@ model ReviewResult {
   @@index([reviewId])
 }
 
+/// Studio'dan yönetilen LLM sağlayıcısı. Her review türü için bir tanesi aktif.
+model ProviderConfig {
+  id        String     @id @default(cuid())
+  name      String
+  kind      ReviewKind
+  baseUrl   String
+  model     String
+  active    Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([kind, active])
+}
+
 /// Proje bazlı coverage yapılandırması ve gate politikası.
 model ProjectConfig {
   id                        String  @id @default(cuid())

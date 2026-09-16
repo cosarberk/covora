@@ -28,6 +28,14 @@ const createRuleBodySchema = z.object({
   enabled: z.boolean().optional()
 })
 
+const createProviderBodySchema = z.object({
+  name: z.string().min(1),
+  kind: reviewKindSchema,
+  baseUrl: z.string().min(1),
+  model: z.string().min(1),
+  active: z.boolean().optional()
+})
+
 const rulePatchBodySchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().optional(),
@@ -143,5 +151,34 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
       return reply.status(404).send({ error: `Proje bulunamadı: ${key}` })
     }
     return reply.send({ reviews: await deps.listRecentReviews(project.id) })
+  })
+
+  app.get('/providers', async () => ({ providers: await deps.listProviders() }))
+
+  app.post('/providers', async (request, reply) => {
+    const parsed = createProviderBodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
+    }
+    const provider = await deps.createProvider({
+      name: parsed.data.name,
+      kind: parsed.data.kind,
+      baseUrl: parsed.data.baseUrl,
+      model: parsed.data.model,
+      ...(parsed.data.active !== undefined ? { active: parsed.data.active } : {})
+    })
+    return reply.status(201).send(provider)
+  })
+
+  app.post('/providers/:id/activate', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    await deps.setActiveProvider(id)
+    return reply.status(204).send()
+  })
+
+  app.delete('/providers/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    await deps.deleteProvider(id)
+    return reply.status(204).send()
   })
 }

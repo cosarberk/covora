@@ -10,10 +10,12 @@ import {
   type CoverageConfig,
   type GatePolicy,
   type ManagementRule,
+  type ProviderConfig,
   type Rule
 } from '@covora/types'
 import type {
   ProjectConfig as PrismaProjectConfig,
+  ProviderConfig as PrismaProviderConfig,
   RuleAudit as PrismaRuleAudit,
   Rule as PrismaRule
 } from '@prisma/client'
@@ -85,6 +87,21 @@ export const toGatePolicy = (config: PrismaProjectConfig): GatePolicy => ({
  * @param audit - Prisma audit kaydı.
  * @returns {@link AuditRecord}.
  */
+/**
+ * Prisma sağlayıcı kaydını domain modeline dönüştürür.
+ *
+ * @param provider - Prisma sağlayıcı kaydı.
+ * @returns {@link ProviderConfig}.
+ */
+export const toProviderConfig = (provider: PrismaProviderConfig): ProviderConfig => ({
+  id: provider.id,
+  name: provider.name,
+  kind: provider.kind,
+  baseUrl: provider.baseUrl,
+  model: provider.model,
+  active: provider.active
+})
+
 export const toAuditRecord = (audit: PrismaRuleAudit): AuditRecord => ({
   id: audit.id,
   action: audit.action,

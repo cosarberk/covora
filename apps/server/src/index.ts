@@ -6,22 +6,29 @@
  */
 
 import { builtinCodeCheckers } from '@covora/checkers'
-import { createOllamaChat } from '@covora/provider-ollama'
+import type { LlmProvider } from '@covora/core'
+import { createOllamaChat, createOllamaProvider } from '@covora/provider-ollama'
 import {
   createPrismaClient,
+  createProvider as createProviderRecord,
   createRule,
   deleteProjectByKey,
+  deleteProvider,
   findProjectByKey,
+  getActiveProvider,
   getEffectiveConfig,
   listEnabledRules,
   listManagementRules,
   listProjects,
+  listProviders,
   listRecentReviews,
   listRuleAudits,
   saveReview,
+  setActiveProvider,
   updateRuleWithAudit,
   upsertProject
 } from '@covora/db'
+import type { ReviewKind } from '@covora/types'
 
 import { buildApp } from './app.js'
 import { loadEnv } from './config/env.js'
@@ -36,13 +43,22 @@ import type { CreateReviewDeps } from './services/review.service.js'
 const start = async (): Promise<void> => {
   const env = loadEnv()
   const prisma = createPrismaClient()
-  const createProvider = createProviderFactory(env)
+  const envProvider = createProviderFactory(env)
+
+  // Aktif sağlayıcı DB'de tanımlıysa onu, yoksa env'deki varsayılanı kullan.
+  const resolveProvider = async (kind: ReviewKind): Promise<LlmProvider> => {
+    const active = await getActiveProvider(prisma, kind)
+    if (active !== null) {
+      return createOllamaProvider({ baseUrl: active.baseUrl, model: active.model, kind })
+    }
+    return envProvider(kind)
+  }
 
   const reviewDeps: CreateReviewDeps = {
     findProjectByKey: (key) => findProjectByKey(prisma, key),
     listEnabledRules: (projectId, kind) => listEnabledRules(prisma, projectId, kind),
     getEffectiveConfig: (projectId) => getEffectiveConfig(prisma, projectId),
-    createProvider,
+    createProvider: resolveProvider,
     saveReview: (input) => saveReview(prisma, input),
     checkers: builtinCodeCheckers
   }
@@ -70,7 +86,11 @@ const start = async (): Promise<void> => {
         level: review.level,
         gatePassed: review.gatePassed,
         createdAt: review.createdAt.toISOString()
-      }))
+      })),
+    listProviders: () => listProviders(prisma),
+    createProvider: (input) => createProviderRecord(prisma, input),
+    setActiveProvider: (id) => setActiveProvider(prisma, id),
+    deleteProvider: (id) => deleteProvider(prisma, id)
   }
 
   const chat = createOllamaChat({

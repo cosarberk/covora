@@ -353,3 +353,29 @@ body {
   height: 80px;
   display: block;
 }
+
+.nav-item {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 12px 10px 0;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.nav-item--active {
+  color: var(--accent);
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 13px;
+  white-space: nowrap;
+}

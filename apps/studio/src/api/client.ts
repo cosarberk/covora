@@ -7,6 +7,7 @@
 import type {
   AuditRecord,
   ManagementRule,
+  ProviderConfig,
   ReviewKind,
   Rule,
   RuleEvaluationType,
@@ -48,6 +49,15 @@ export interface CreateRuleInput {
   readonly weight: number
 }
 
+/** Yeni sağlayıcı girdisi. */
+export interface CreateProviderInput {
+  readonly name: string
+  readonly kind: ReviewKind
+  readonly baseUrl: string
+  readonly model: string
+  readonly active?: boolean
+}
+
 /** Kural güncelleme girdisi. */
 export interface UpdateRuleInput {
   readonly title?: string
@@ -60,6 +70,10 @@ export interface UpdateRuleInput {
 export interface StudioApi {
   listProjects(): Promise<readonly ProjectSummary[]>
   deleteProject(key: string): Promise<void>
+  listProviders(): Promise<readonly ProviderConfig[]>
+  createProvider(input: CreateProviderInput): Promise<ProviderConfig>
+  activateProvider(id: string): Promise<void>
+  deleteProvider(id: string): Promise<void>
   listRules(projectKey: string): Promise<readonly ManagementRule[]>
   createRule(projectKey: string, input: CreateRuleInput): Promise<Rule>
   updateRule(ruleId: string, patch: UpdateRuleInput): Promise<void>
@@ -100,6 +114,37 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
 
     async deleteProject(key) {
       const response = await fetch(url(`/projects/${encodeURIComponent(key)}`), { method: 'DELETE' })
+      if (!response.ok) {
+        throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
+      }
+    },
+
+    async listProviders() {
+      const data = await parseJson<{ providers: ProviderConfig[] }>(await fetch(url('/providers')))
+      return data.providers
+    },
+
+    async createProvider(input) {
+      return parseJson<ProviderConfig>(
+        await fetch(url('/providers'), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input)
+        })
+      )
+    },
+
+    async activateProvider(id) {
+      const response = await fetch(url(`/providers/${encodeURIComponent(id)}/activate`), {
+        method: 'POST'
+      })
+      if (!response.ok) {
+        throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
+      }
+    },
+
+    async deleteProvider(id) {
+      const response = await fetch(url(`/providers/${encodeURIComponent(id)}`), { method: 'DELETE' })
       if (!response.ok) {
         throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
       }

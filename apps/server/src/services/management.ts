@@ -5,8 +5,15 @@
  * Bağımlılıklar dışarıdan enjekte edilir.
  */
 
-import type { CreateRuleData } from '@covora/db'
-import type { AuditRecord, ManagementRule, ReviewKind, Rule, Severity } from '@covora/types'
+import type { CreateRuleData, ProviderInput } from '@covora/db'
+import type {
+  AuditRecord,
+  ManagementRule,
+  ProviderConfig,
+  ReviewKind,
+  Rule,
+  Severity
+} from '@covora/types'
 
 /** Bir kural güncellemesinde değiştirilebilir alanlar. */
 export interface RulePatch {
@@ -54,6 +61,14 @@ export interface ManagementDeps {
   readonly updateRule: (ruleId: string, patch: RulePatch, changedBy: string) => Promise<void>
   /** Bir kuralın audit geçmişini getirir. */
   readonly listRuleAudits: (ruleId: string) => Promise<readonly AuditRecord[]>
+  /** LLM sağlayıcılarını listeler. */
+  readonly listProviders: () => Promise<readonly ProviderConfig[]>
+  /** Yeni LLM sağlayıcısı oluşturur. */
+  readonly createProvider: (input: ProviderInput) => Promise<ProviderConfig>
+  /** Bir sağlayıcıyı aktif yapar (aynı türdeki diğerleri pasifleşir). */
+  readonly setActiveProvider: (id: string) => Promise<void>
+  /** Bir sağlayıcıyı siler. */
+  readonly deleteProvider: (id: string) => Promise<void>
   /** Projenin son review'larını getirir. */
   readonly listRecentReviews: (projectId: string, limit?: number) => Promise<readonly ReviewRecord[]>
 }

@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { createStudioApi, type ProjectSummary } from './api/client.js'
+import { ProvidersPanel } from './components/ProvidersPanel.js'
 import { ReviewsPanel } from './components/ReviewsPanel.js'
 import { RulesPanel } from './components/RulesPanel.js'
 
@@ -21,6 +22,7 @@ type Tab = 'rules' | 'reviews'
 export const App = (): React.JSX.Element => {
   const [projects, setProjects] = useState<readonly ProjectSummary[]>([])
   const [selected, setSelected] = useState<string | null>(null)
+  const [view, setView] = useState<'project' | 'providers'>('project')
   const [tab, setTab] = useState<Tab>('rules')
   const [error, setError] = useState<string | null>(null)
   const [newKey, setNewKey] = useState('')
@@ -92,7 +94,10 @@ export const App = (): React.JSX.Element => {
                 <button
                   type="button"
                   className="project__select"
-                  onClick={() => setSelected(project.key)}
+                  onClick={() => {
+                    setSelected(project.key)
+                    setView('project')
+                  }}
                 >
                   <span className="project__name">{project.name}</span>
                   <span className="mono project__key">{project.key}</span>
@@ -127,12 +132,22 @@ export const App = (): React.JSX.Element => {
               Proje Ekle
             </button>
           </form>
+
+          <button
+            type="button"
+            className={view === 'providers' ? 'nav-item nav-item--active' : 'nav-item'}
+            onClick={() => setView('providers')}
+          >
+            ⚙ AI Sağlayıcılar
+          </button>
         </aside>
 
         <main className="main">
           {error !== null && <div className="state state--error">{error}</div>}
 
-          {selected === null ? (
+          {view === 'providers' ? (
+            <ProvidersPanel api={api} />
+          ) : selected === null ? (
             <div className="state">Soldan bir proje seç ya da yeni proje oluştur.</div>
           ) : (
             <>

@@ -25,8 +25,8 @@ export interface CreateReviewDeps {
   readonly listEnabledRules: (projectId: string, kind: ReviewKind) => Promise<readonly Rule[]>
   /** Projenin etkin yapılandırmasını getirir. */
   readonly getEffectiveConfig: (projectId: string) => Promise<EffectiveConfig>
-  /** Review türüne göre sağlayıcı üretir. */
-  readonly createProvider: (kind: ReviewKind) => LlmProvider
+  /** Review türüne göre sağlayıcı üretir (DB'deki aktif sağlayıcı, yoksa env). */
+  readonly createProvider: (kind: ReviewKind) => Promise<LlmProvider>
   /** Review sonucunu kaydeder ve kimliğini döner. */
   readonly saveReview: (input: SaveReviewInput) => Promise<string>
   /** Deterministik kurallar için checker kaydı (opsiyonel). */
@@ -72,7 +72,7 @@ export const createReview = async (
     deps.getEffectiveConfig(project.id)
   ])
 
-  const provider = deps.createProvider(request.input.kind)
+  const provider = await deps.createProvider(request.input.kind)
 
   const outcome = await runReview({
     rules,
