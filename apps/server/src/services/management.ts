@@ -5,7 +5,14 @@
  * Bağımlılıklar dışarıdan enjekte edilir.
  */
 
-import type { CreateRuleData, CreateWebhookData, PackInput, ProviderInput } from '@covora/db'
+import type {
+  CreateRuleData,
+  CreateWebhookData,
+  EffectiveConfig,
+  PackInput,
+  ProjectConfigInput,
+  ProviderInput
+} from '@covora/db'
 import type {
   AuditRecord,
   DashboardSummary,
@@ -102,4 +109,11 @@ export interface ManagementDeps {
   readonly setWebhookActive: (id: string, active: boolean) => Promise<void>
   /** Bir webhook'u siler. */
   readonly deleteWebhook: (id: string) => Promise<void>
+  /** Projenin etkin yapılandırmasını (coverage + gate) getirir. */
+  readonly getProjectConfig: (projectId: string) => Promise<EffectiveConfig>
+  /** Projenin yapılandırmasını günceller. */
+  readonly updateProjectConfig: (
+    projectId: string,
+    input: ProjectConfigInput
+  ) => Promise<EffectiveConfig>
 }

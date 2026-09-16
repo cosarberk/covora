@@ -45,7 +45,8 @@ import {
   setWebhookActive,
   toUser,
   updateRuleWithAudit,
-  upsertProject
+  upsertProject,
+  upsertProjectConfig
 } from '@covora/db'
 import type { ReviewKind, User } from '@covora/types'
 
@@ -151,6 +152,8 @@ const start = async (): Promise<void> => {
     createWebhook: (data) => createWebhook(prisma, data),
     setWebhookActive: (id, active) => setWebhookActive(prisma, id, active),
     deleteWebhook: (id) => deleteWebhook(prisma, id),
+    getProjectConfig: (projectId) => getEffectiveConfig(prisma, projectId),
+    updateProjectConfig: (projectId, input) => upsertProjectConfig(prisma, projectId, input),
     listProviders: () => listProviders(prisma),
     createProvider: (input) => createProviderRecord(prisma, input),
     setActiveProvider: (id) => setActiveProvider(prisma, id),

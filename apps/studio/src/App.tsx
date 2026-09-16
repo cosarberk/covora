@@ -17,13 +17,14 @@ import { ProjectPacksPanel } from './components/ProjectPacksPanel.js'
 import { ProvidersPanel } from './components/ProvidersPanel.js'
 import { ReviewsPanel } from './components/ReviewsPanel.js'
 import { RulesPanel } from './components/RulesPanel.js'
+import { SettingsPanel } from './components/SettingsPanel.js'
 import { WebhooksPanel } from './components/WebhooksPanel.js'
 
 // Prod'da boş = same-origin (server studio'yu serve eder). Dev'de Vite proxy.
 const serverUrl = import.meta.env.VITE_COVORA_SERVER_URL ?? ''
 const api = createStudioApi({ baseUrl: serverUrl })
 
-type Tab = 'packs' | 'rules' | 'reviews' | 'webhooks'
+type Tab = 'packs' | 'rules' | 'reviews' | 'webhooks' | 'settings'
 type View = 'dashboard' | 'project' | 'providers' | 'packs'
 
 /** Studio uygulaması. */
@@ -290,6 +291,13 @@ export const App = (): React.JSX.Element => {
                 >
                   Bildirimler
                 </button>
+                <button
+                  type="button"
+                  className={tab === 'settings' ? 'tab tab--active' : 'tab'}
+                  onClick={() => setTab('settings')}
+                >
+                  Ayarlar
+                </button>
               </nav>
 
               {tab === 'packs' ? (
@@ -302,8 +310,10 @@ export const App = (): React.JSX.Element => {
                 />
               ) : tab === 'reviews' ? (
                 <ReviewsPanel api={api} projectKey={selected} />
-              ) : (
+              ) : tab === 'webhooks' ? (
                 <WebhooksPanel api={api} projectKey={selected} />
+              ) : (
+                <SettingsPanel api={api} projectKey={selected} />
               )}
             </>
           )}

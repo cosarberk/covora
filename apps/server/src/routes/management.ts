@@ -44,6 +44,17 @@ const assignPackBodySchema = z.object({
   packId: z.string().min(1)
 })
 
+const projectConfigBodySchema = z.object({
+  partialCredit: z.number().min(0).max(1),
+  levels: z
+    .array(z.object({ id: z.string().min(1), minScore: z.number().min(0).max(100) }))
+    .min(1),
+  gateMinScore: z.number().min(0).max(100),
+  gateBlockOnFailedBlockers: z.boolean(),
+  gateBlockOnRegression: z.boolean(),
+  regressionThreshold: z.number().min(0)
+})
+
 const createWebhookBodySchema = z.object({
   url: z.string().min(1),
   events: z.array(webhookEventSchema).min(1)
@@ -235,6 +246,28 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
   })
 
   app.get('/dashboard', async () => deps.getDashboard())
+
+  app.get('/projects/:key/config', async (request, reply) => {
+    const { key } = request.params as { key: string }
+    const project = await deps.findProjectByKey(key)
+    if (project === null) {
+      return reply.status(404).send({ error: `Proje bulunamadı: ${key}` })
+    }
+    return reply.send(await deps.getProjectConfig(project.id))
+  })
+
+  app.put('/projects/:key/config', async (request, reply) => {
+    const { key } = request.params as { key: string }
+    const parsed = projectConfigBodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
+    }
+    const project = await deps.findProjectByKey(key)
+    if (project === null) {
+      return reply.status(404).send({ error: `Proje bulunamadı: ${key}` })
+    }
+    return reply.send(await deps.updateProjectConfig(project.id, parsed.data))
+  })
 
   app.get('/projects/:key/webhooks', async (request, reply) => {
     const { key } = request.params as { key: string }

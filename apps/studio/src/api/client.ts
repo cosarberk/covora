@@ -8,7 +8,9 @@
 
 import type {
   AuditRecord,
+  CoverageConfig,
   DashboardSummary,
+  GatePolicy,
   ManagementRule,
   Pack,
   ProviderConfig,
@@ -20,6 +22,22 @@ import type {
   Webhook,
   WebhookEvent
 } from '@covora/types'
+
+/** Bir projenin etkin yapılandırması (coverage + gate). */
+export interface ProjectConfig {
+  readonly coverageConfig: CoverageConfig
+  readonly gatePolicy: GatePolicy
+}
+
+/** Proje yapılandırması güncelleme girdisi (server şemasıyla uyumlu). */
+export interface ProjectConfigInput {
+  readonly partialCredit: number
+  readonly levels: readonly { readonly id: string; readonly minScore: number }[]
+  readonly gateMinScore: number
+  readonly gateBlockOnFailedBlockers: boolean
+  readonly gateBlockOnRegression: boolean
+  readonly regressionThreshold: number
+}
 
 /** Studio API yapılandırması. */
 export interface StudioApiConfig {
@@ -127,6 +145,8 @@ export interface StudioApi {
   createWebhook(projectKey: string, input: CreateWebhookInput): Promise<Webhook>
   setWebhookActive(id: string, active: boolean): Promise<void>
   deleteWebhook(id: string): Promise<void>
+  getProjectConfig(projectKey: string): Promise<ProjectConfig>
+  updateProjectConfig(projectKey: string, input: ProjectConfigInput): Promise<ProjectConfig>
 }
 
 const TOKEN_KEY = 'covora.token'
@@ -349,6 +369,16 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
 
     async deleteWebhook(id) {
       ok(await authFetch(`/webhooks/${encodeURIComponent(id)}`, { method: 'DELETE' }))
+    },
+
+    async getProjectConfig(projectKey) {
+      return json<ProjectConfig>(await authFetch(`${projectPath(projectKey)}/config`))
+    },
+
+    async updateProjectConfig(projectKey, input) {
+      return json<ProjectConfig>(
+        await postJson(`${projectPath(projectKey)}/config`, input, 'PUT')
+      )
     }
   }
 }

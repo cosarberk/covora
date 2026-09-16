@@ -6,8 +6,8 @@
  */
 
 import { defaultCoverageConfig, defaultGatePolicy } from '@covora/core'
-import type { CoverageConfig, GatePolicy } from '@covora/types'
-import type { PrismaClient } from '@prisma/client'
+import type { CoverageConfig, CoverageLevelThreshold, GatePolicy } from '@covora/types'
+import type { Prisma, PrismaClient } from '@prisma/client'
 
 import { toCoverageConfig, toGatePolicy } from '../mappers.js'
 
@@ -41,4 +41,43 @@ export const getEffectiveConfig = async (
     coverageConfig: toCoverageConfig(config),
     gatePolicy: toGatePolicy(config)
   }
+}
+
+/** Proje yapılandırmasını güncellemek için gerekli alanlar. */
+export interface ProjectConfigInput {
+  readonly partialCredit: number
+  readonly levels: readonly CoverageLevelThreshold[]
+  readonly gateMinScore: number
+  readonly gateBlockOnFailedBlockers: boolean
+  readonly gateBlockOnRegression: boolean
+  readonly regressionThreshold: number
+}
+
+/**
+ * Bir projenin coverage yapılandırmasını ve gate politikasını oluşturur/günceller.
+ *
+ * @param prisma - Prisma client.
+ * @param projectId - Proje kimliği.
+ * @param input - Yapılandırma alanları.
+ * @returns Güncellenmiş etkin yapılandırma.
+ */
+export const upsertProjectConfig = async (
+  prisma: PrismaClient,
+  projectId: string,
+  input: ProjectConfigInput
+): Promise<EffectiveConfig> => {
+  const levels = input.levels as unknown as Prisma.InputJsonValue
+  const data = {
+    partialCredit: input.partialCredit,
+    gateMinScore: input.gateMinScore,
+    gateBlockOnFailedBlockers: input.gateBlockOnFailedBlockers,
+    gateBlockOnRegression: input.gateBlockOnRegression,
+    regressionThreshold: input.regressionThreshold
+  }
+  const config = await prisma.projectConfig.upsert({
+    where: { projectId },
+    create: { projectId, levels, ...data },
+    update: { levels, ...data }
+  })
+  return { coverageConfig: toCoverageConfig(config), gatePolicy: toGatePolicy(config) }
 }
