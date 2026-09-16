@@ -41,7 +41,9 @@ spec:
           volumeMounts:
             - name: models
               mountPath: /root/.ollama
-          # Sunucu ayağa kalkınca modelleri otomatik indir (idempotent; PVC'de kalıcı)
+          # Modelleri ARKA PLANDA indir (idempotent; PVC'de kalıcı).
+          # Arka plan şart: model indirme uzun sürer; postStart'ı bloklarsa
+          # pod "ready" olamaz ve deployment progress deadline'ı aşılır.
           lifecycle:
             postStart:
               exec:
@@ -49,9 +51,11 @@ spec:
                   - /bin/sh
                   - -c
                   - |
-                    until ollama list >/dev/null 2>&1; do sleep 3; done
-                    ollama pull {{ .Values.ollama.models.ui }}
-                    ollama pull {{ .Values.ollama.models.code }}
+                    (
+                      until ollama list >/dev/null 2>&1; do sleep 3; done
+                      ollama pull {{ .Values.ollama.models.ui }}
+                      ollama pull {{ .Values.ollama.models.code }}
+                    ) >/tmp/pull.log 2>&1 &
           readinessProbe:
             httpGet:
               path: /
