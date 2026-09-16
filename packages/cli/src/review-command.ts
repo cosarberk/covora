@@ -16,6 +16,8 @@ export interface ReviewCommandOptions {
   readonly server: string
   /** Proje anahtarı. */
   readonly project: string
+  /** Projenin ingest token'ı (studio'dan alınır). */
+  readonly token: string
   /** Review edilen kodun hash'i. */
   readonly codeHash: string
   /** Review edilecek dosya yolları. */
@@ -57,7 +59,7 @@ export const runReviewCommand = async (
 
   const response = await fetch(`${options.server}/reviews`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-covora-token': options.token },
     body: JSON.stringify({
       projectKey: options.project,
       codeHash: options.codeHash,

@@ -402,3 +402,95 @@ body {
   font-size: 15px;
   color: var(--text);
 }
+
+/* Giriş ekranı */
+.login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login__card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 28px;
+}
+
+.login__brand {
+  margin: 0;
+}
+
+.login__hint {
+  margin: 0 0 4px;
+  color: var(--text-dim);
+}
+
+.login__input,
+.login__submit {
+  width: 100%;
+}
+
+.login__submit {
+  margin-top: 4px;
+}
+
+/* Üst bar kullanıcı */
+.header__user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header__email {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.state--full {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ingest token paneli */
+.ingest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.ingest__label {
+  color: var(--text-dim);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ingest__token {
+  flex: 1 1 auto;
+  min-width: 160px;
+  overflow-x: auto;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+.ingest__hint {
+  flex-basis: 100%;
+  color: var(--text-dim);
+  font-size: 12px;
+}

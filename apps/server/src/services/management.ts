@@ -31,6 +31,8 @@ export interface ProjectRecord {
   readonly id: string
   readonly key: string
   readonly name: string
+  /** Makine istemcilerinin review göndermek için kullandığı gizli token. */
+  readonly ingestToken: string
 }
 
 /** Review geçmişi okuma modeli (sonuç ayrıntısı olmadan özet). */

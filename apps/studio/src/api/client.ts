@@ -1,7 +1,9 @@
 /**
  * @module studio/api/client
  *
- * Covora sunucusunun yönetim uç noktalarını çağıran client.
+ * Covora sunucusunun yönetim uç noktalarını çağıran client. JWT token'ı
+ * localStorage'da saklanır ve her isteğe `Authorization: Bearer` olarak eklenir;
+ * 401 alınınca `onUnauthorized` tetiklenir (App oturumu kapatır).
  */
 
 import type {
@@ -12,7 +14,8 @@ import type {
   ReviewKind,
   Rule,
   RuleEvaluationType,
-  Severity
+  Severity,
+  User
 } from '@covora/types'
 
 /** Studio API yapılandırması. */
@@ -26,6 +29,8 @@ export interface ProjectSummary {
   readonly id: string
   readonly key: string
   readonly name: string
+  /** Makine istemcilerinin review göndermek için kullandığı gizli token. */
+  readonly ingestToken: string
 }
 
 /** Review geçmişi kaydı. */
@@ -78,6 +83,16 @@ export interface UpdateRuleInput {
 
 /** Studio API arayüzü. */
 export interface StudioApi {
+  /** Kayıtlı token var mı (oturum açık kabul edilir). */
+  hasSession(): boolean
+  /** 401 alındığında çağrılacak geri çağırımı ayarlar. */
+  onUnauthorized(handler: () => void): void
+  /** Giriş yapar; başarılıysa token'ı saklar ve kullanıcıyı döner. */
+  login(email: string, password: string): Promise<User>
+  /** Oturumu kapatır (token'ı siler). */
+  logout(): void
+  /** Mevcut kullanıcıyı doğrular. */
+  me(): Promise<User>
   listProjects(): Promise<readonly ProjectSummary[]>
   deleteProject(key: string): Promise<void>
   listProviders(): Promise<readonly ProviderConfig[]>
@@ -99,18 +114,14 @@ export interface StudioApi {
   removePack(projectKey: string, packId: string): Promise<void>
 }
 
-/**
- * Yanıtı kontrol edip JSON gövdesini döndürür.
- *
- * @param response - Fetch yanıtı.
- * @returns Ayrıştırılmış gövde.
- * @throws Yanıt başarısızsa.
- */
-const parseJson = async <T>(response: Response): Promise<T> => {
-  if (!response.ok) {
-    throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
+const TOKEN_KEY = 'covora.token'
+
+const readToken = (): string | null => {
+  try {
+    return globalThis.localStorage?.getItem(TOKEN_KEY) ?? null
+  } catch {
+    return null
   }
-  return (await response.json()) as T
 }
 
 /**
@@ -123,157 +134,183 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
   const url = (path: string): string => `${config.baseUrl}${path}`
   const projectPath = (key: string): string => `/projects/${encodeURIComponent(key)}`
 
+  let token: string | null = readToken()
+  let unauthorizedHandler: () => void = () => {}
+
+  const setToken = (value: string | null): void => {
+    token = value
+    try {
+      if (value === null) {
+        globalThis.localStorage?.removeItem(TOKEN_KEY)
+      } else {
+        globalThis.localStorage?.setItem(TOKEN_KEY, value)
+      }
+    } catch {
+      // localStorage erişilemezse token yalnızca bellekte tutulur.
+    }
+  }
+
+  /** Authorization başlığı ekleyen, 401'de oturum kapatan fetch sarmalayıcısı. */
+  const authFetch = async (path: string, init: RequestInit = {}): Promise<Response> => {
+    const headers = new Headers(init.headers)
+    if (token !== null) {
+      headers.set('authorization', `Bearer ${token}`)
+    }
+    const response = await fetch(url(path), { ...init, headers })
+    if (response.status === 401) {
+      setToken(null)
+      unauthorizedHandler()
+      throw new Error('Oturum sona erdi, tekrar giriş yapın')
+    }
+    return response
+  }
+
+  const json = async <T>(response: Response): Promise<T> => {
+    if (!response.ok) {
+      throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
+    }
+    return (await response.json()) as T
+  }
+
+  const ok = (response: Response): void => {
+    if (!response.ok) {
+      throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
+    }
+  }
+
+  const postJson = (path: string, body: unknown, method = 'POST'): Promise<Response> =>
+    authFetch(path, {
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+
   return {
+    hasSession() {
+      return token !== null
+    },
+
+    onUnauthorized(handler) {
+      unauthorizedHandler = handler
+    },
+
+    async login(email, password) {
+      const response = await fetch(url('/auth/login'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      })
+      if (!response.ok) {
+        throw new Error(response.status === 401 ? 'E-posta ya da parola hatalı' : 'Giriş başarısız')
+      }
+      const data = (await response.json()) as { token: string; user: User }
+      setToken(data.token)
+      return data.user
+    },
+
+    logout() {
+      setToken(null)
+    },
+
+    async me() {
+      const data = await json<{ user: User }>(await authFetch('/auth/me'))
+      return data.user
+    },
+
     async listProjects() {
-      const data = await parseJson<{ projects: ProjectSummary[] }>(await fetch(url('/projects')))
+      const data = await json<{ projects: ProjectSummary[] }>(await authFetch('/projects'))
       return data.projects
     },
 
     async deleteProject(key) {
-      const response = await fetch(url(`/projects/${encodeURIComponent(key)}`), { method: 'DELETE' })
-      if (!response.ok) {
-        throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
-      }
+      ok(await authFetch(projectPath(key), { method: 'DELETE' }))
     },
 
     async listProviders() {
-      const data = await parseJson<{ providers: ProviderConfig[] }>(await fetch(url('/providers')))
+      const data = await json<{ providers: ProviderConfig[] }>(await authFetch('/providers'))
       return data.providers
     },
 
     async createProvider(input) {
-      return parseJson<ProviderConfig>(
-        await fetch(url('/providers'), {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(input)
-        })
-      )
+      return json<ProviderConfig>(await postJson('/providers', input))
     },
 
     async activateProvider(id) {
-      const response = await fetch(url(`/providers/${encodeURIComponent(id)}/activate`), {
-        method: 'POST'
-      })
-      if (!response.ok) {
-        throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
-      }
+      ok(await authFetch(`/providers/${encodeURIComponent(id)}/activate`, { method: 'POST' }))
     },
 
     async deleteProvider(id) {
-      const response = await fetch(url(`/providers/${encodeURIComponent(id)}`), { method: 'DELETE' })
-      if (!response.ok) {
-        throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
-      }
+      ok(await authFetch(`/providers/${encodeURIComponent(id)}`, { method: 'DELETE' }))
     },
 
     async listRules(projectKey) {
-      const data = await parseJson<{ rules: ManagementRule[] }>(
-        await fetch(url(`${projectPath(projectKey)}/rules`))
+      const data = await json<{ rules: ManagementRule[] }>(
+        await authFetch(`${projectPath(projectKey)}/rules`)
       )
       return data.rules
     },
 
     async updateRule(ruleId, patch) {
-      const response = await fetch(url(`/rules/${encodeURIComponent(ruleId)}`), {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(patch)
-      })
-      if (!response.ok) {
-        throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
-      }
+      ok(await postJson(`/rules/${encodeURIComponent(ruleId)}`, patch, 'PATCH'))
     },
 
     async listAudits(ruleId) {
-      const data = await parseJson<{ audits: AuditRecord[] }>(
-        await fetch(url(`/rules/${encodeURIComponent(ruleId)}/audits`))
+      const data = await json<{ audits: AuditRecord[] }>(
+        await authFetch(`/rules/${encodeURIComponent(ruleId)}/audits`)
       )
       return data.audits
     },
 
     async listReviews(projectKey) {
-      const data = await parseJson<{ reviews: ReviewRecord[] }>(
-        await fetch(url(`${projectPath(projectKey)}/reviews`))
+      const data = await json<{ reviews: ReviewRecord[] }>(
+        await authFetch(`${projectPath(projectKey)}/reviews`)
       )
       return data.reviews
     },
 
     async upsertProject(key, name) {
-      return parseJson<ProjectSummary>(
-        await fetch(url('/projects'), {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ key, name })
-        })
-      )
+      return json<ProjectSummary>(await postJson('/projects', { key, name }))
     },
 
     async listPacks() {
-      const data = await parseJson<{ packs: Pack[] }>(await fetch(url('/packs')))
+      const data = await json<{ packs: Pack[] }>(await authFetch('/packs'))
       return data.packs
     },
 
     async createPack(input) {
-      return parseJson<Pack>(
-        await fetch(url('/packs'), {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(input)
-        })
-      )
+      return json<Pack>(await postJson('/packs', input))
     },
 
     async deletePack(id) {
-      const response = await fetch(url(`/packs/${encodeURIComponent(id)}`), { method: 'DELETE' })
-      if (!response.ok) {
-        throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
-      }
+      ok(await authFetch(`/packs/${encodeURIComponent(id)}`, { method: 'DELETE' }))
     },
 
     async listPackRules(packId) {
-      const data = await parseJson<{ rules: ManagementRule[] }>(
-        await fetch(url(`/packs/${encodeURIComponent(packId)}/rules`))
+      const data = await json<{ rules: ManagementRule[] }>(
+        await authFetch(`/packs/${encodeURIComponent(packId)}/rules`)
       )
       return data.rules
     },
 
     async createPackRule(packId, input) {
-      return parseJson<Rule>(
-        await fetch(url(`/packs/${encodeURIComponent(packId)}/rules`), {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(input)
-        })
-      )
+      return json<Rule>(await postJson(`/packs/${encodeURIComponent(packId)}/rules`, input))
     },
 
     async listProjectPacks(projectKey) {
-      const data = await parseJson<{ packs: Pack[] }>(
-        await fetch(url(`${projectPath(projectKey)}/packs`))
-      )
+      const data = await json<{ packs: Pack[] }>(await authFetch(`${projectPath(projectKey)}/packs`))
       return data.packs
     },
 
     async assignPack(projectKey, packId) {
-      const response = await fetch(url(`${projectPath(projectKey)}/packs`), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ packId })
-      })
-      if (!response.ok) {
-        throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
-      }
+      ok(await postJson(`${projectPath(projectKey)}/packs`, { packId }))
     },
 
     async removePack(projectKey, packId) {
-      const response = await fetch(
-        url(`${projectPath(projectKey)}/packs/${encodeURIComponent(packId)}`),
-        { method: 'DELETE' }
+      ok(
+        await authFetch(`${projectPath(projectKey)}/packs/${encodeURIComponent(packId)}`, {
+          method: 'DELETE'
+        })
       )
-      if (!response.ok) {
-        throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
-      }
     }
   }
 }

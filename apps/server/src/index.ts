@@ -10,15 +10,18 @@ import type { LlmProvider } from '@covora/core'
 import { createOllamaChat, createOllamaProvider } from '@covora/provider-ollama'
 import {
   assignPackToProject,
+  countUsers,
   createPack,
   createPrismaClient,
   createProvider as createProviderRecord,
   createRule,
+  createUser,
   deletePack,
   deleteProjectByKey,
   deleteProvider,
   ensureBuiltinPacks,
   findProjectByKey,
+  findUserByEmail,
   getActiveProvider,
   getEffectiveConfig,
   listEnabledRules,
@@ -33,13 +36,16 @@ import {
   removePackFromProject,
   saveReview,
   setActiveProvider,
+  toUser,
   updateRuleWithAudit,
   upsertProject
 } from '@covora/db'
-import type { ReviewKind } from '@covora/types'
+import type { ReviewKind, User } from '@covora/types'
 
 import { buildApp } from './app.js'
+import { hashPassword, verifyPassword } from './auth/password.js'
 import { loadEnv } from './config/env.js'
+import type { AuthDeps } from './routes/auth.js'
 import type { ChatDeps } from './routes/chat.js'
 import type { ManagementDeps } from './services/management.js'
 import { createProviderFactory } from './services/provider-factory.js'
@@ -55,6 +61,16 @@ const start = async (): Promise<void> => {
 
   // Yerleşik pack'leri ve kurallarını hazırla (idempotent).
   await ensureBuiltinPacks(prisma)
+
+  // İlk kurulumda admin kullanıcıyı seed et (hiç kullanıcı yoksa ve env verilmişse).
+  if (env.COVORA_ADMIN_EMAIL !== undefined && env.COVORA_ADMIN_PASSWORD !== undefined) {
+    if ((await countUsers(prisma)) === 0) {
+      await createUser(prisma, {
+        email: env.COVORA_ADMIN_EMAIL,
+        passwordHash: await hashPassword(env.COVORA_ADMIN_PASSWORD)
+      })
+    }
+  }
 
   // Aktif sağlayıcı DB'de tanımlıysa onu, yoksa env'deki varsayılanı kullan.
   const resolveProvider = async (kind: ReviewKind): Promise<LlmProvider> => {
@@ -76,12 +92,21 @@ const start = async (): Promise<void> => {
 
   const managementDeps: ManagementDeps = {
     findProjectByKey: (key) => findProjectByKey(prisma, key),
-    upsertProject: (key, name) => upsertProject(prisma, key, name),
+    upsertProject: async (key, name) => {
+      const project = await upsertProject(prisma, key, name)
+      return {
+        id: project.id,
+        key: project.key,
+        name: project.name,
+        ingestToken: project.ingestToken
+      }
+    },
     listProjects: async () =>
       (await listProjects(prisma)).map((project) => ({
         id: project.id,
         key: project.key,
-        name: project.name
+        name: project.name,
+        ingestToken: project.ingestToken
       })),
     deleteProject: (key) => deleteProjectByKey(prisma, key),
     listRules: (projectId) => listManagementRules(prisma, projectId),
@@ -121,7 +146,27 @@ const start = async (): Promise<void> => {
     sendChat: (messages) => chat.send(messages)
   }
 
-  const app = buildApp({ reviewDeps, managementDeps, chatDeps })
+  const authenticate = async (email: string, password: string): Promise<User | null> => {
+    const record = await findUserByEmail(prisma, email)
+    if (record === null || !(await verifyPassword(password, record.passwordHash))) {
+      return null
+    }
+    return toUser(record)
+  }
+
+  const authDeps: AuthDeps = {
+    authenticate,
+    secret: env.COVORA_AUTH_SECRET
+  }
+
+  const ingestDeps = {
+    resolveIngestToken: async (projectKey: string): Promise<string | null> => {
+      const project = await findProjectByKey(prisma, projectKey)
+      return project?.ingestToken ?? null
+    }
+  }
+
+  const app = buildApp({ reviewDeps, managementDeps, chatDeps, authDeps, ingestDeps })
 
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' })

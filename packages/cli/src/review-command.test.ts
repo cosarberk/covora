@@ -15,6 +15,7 @@ import { ReviewExitCode, runReviewCommand } from './review-command.js'
 const options = {
   server: 'http://localhost:4000',
   project: 'my-plugin',
+  token: 'ingest-token-1',
   codeHash: 'hash-1',
   files: ['src/a.ts']
 }

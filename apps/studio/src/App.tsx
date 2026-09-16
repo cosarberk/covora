@@ -1,13 +1,16 @@
 /**
  * @module studio/App
  *
- * Studio kök bileşeni: sol tarafta proje yönetimi (liste/oluştur/sil), seçilen
- * projenin kural ve review sekmeleri sağda.
+ * Studio kök bileşeni. Giriş yapılmadan içerik gösterilmez. Girişten sonra:
+ * solda proje yönetimi (liste/oluştur/sil) + Review Paketleri / AI Sağlayıcılar
+ * navigasyonu, sağda seçilen projenin paket/kural/review sekmeleri.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import type { User } from '@covora/types'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { createStudioApi, type ProjectSummary } from './api/client.js'
+import { Login } from './components/Login.js'
 import { PacksPanel } from './components/PacksPanel.js'
 import { ProjectPacksPanel } from './components/ProjectPacksPanel.js'
 import { ProvidersPanel } from './components/ProvidersPanel.js'
@@ -23,6 +26,8 @@ type View = 'project' | 'providers' | 'packs'
 
 /** Studio uygulaması. */
 export const App = (): React.JSX.Element => {
+  const [user, setUser] = useState<User | null>(null)
+  const [authReady, setAuthReady] = useState(false)
   const [projects, setProjects] = useState<readonly ProjectSummary[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [view, setView] = useState<View>('project')
@@ -30,6 +35,21 @@ export const App = (): React.JSX.Element => {
   const [error, setError] = useState<string | null>(null)
   const [newKey, setNewKey] = useState('')
   const [newName, setNewName] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  // Oturum: sayfa açılışında kayıtlı token'ı doğrula; 401'de otomatik çıkış.
+  useEffect(() => {
+    api.onUnauthorized(() => setUser(null))
+    if (!api.hasSession()) {
+      setAuthReady(true)
+      return
+    }
+    void api
+      .me()
+      .then((current) => setUser(current))
+      .catch(() => setUser(null))
+      .finally(() => setAuthReady(true))
+  }, [])
 
   const loadProjectRules = useCallback(
     () => (selected === null ? Promise.resolve([]) : api.listRules(selected)),
@@ -46,8 +66,15 @@ export const App = (): React.JSX.Element => {
   }, [])
 
   useEffect(() => {
-    void loadProjects()
-  }, [loadProjects])
+    if (user !== null) {
+      void loadProjects()
+    }
+  }, [user, loadProjects])
+
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.key === selected) ?? null,
+    [projects, selected]
+  )
 
   const createProject = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
@@ -62,6 +89,7 @@ export const App = (): React.JSX.Element => {
       setNewName('')
       await loadProjects()
       setSelected(key)
+      setView('project')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Bilinmeyen hata')
     }
@@ -82,12 +110,43 @@ export const App = (): React.JSX.Element => {
     }
   }
 
+  const copyToken = async (value: string): Promise<void> => {
+    try {
+      await globalThis.navigator?.clipboard?.writeText(value)
+      setCopied(true)
+      globalThis.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      setError('Panoya kopyalanamadı')
+    }
+  }
+
+  const logout = (): void => {
+    api.logout()
+    setUser(null)
+    setSelected(null)
+    setProjects([])
+  }
+
+  if (!authReady) {
+    return <div className="state state--full">Yükleniyor…</div>
+  }
+
+  if (user === null) {
+    return <Login api={api} onLogin={(current) => setUser(current)} />
+  }
+
   return (
     <div className="app">
       <header className="header">
         <h1 className="brand">
           Covora <span className="brand__accent">Studio</span>
         </h1>
+        <div className="header__user">
+          <span className="header__email mono">{user.email}</span>
+          <button type="button" className="link-button" onClick={logout}>
+            Çıkış
+          </button>
+        </div>
       </header>
 
       <div className="layout">
@@ -168,6 +227,23 @@ export const App = (): React.JSX.Element => {
             <div className="state">Soldan bir proje seç ya da yeni proje oluştur.</div>
           ) : (
             <>
+              {selectedProject !== null && (
+                <div className="ingest">
+                  <span className="ingest__label">Ingest token</span>
+                  <code className="ingest__token mono">{selectedProject.ingestToken}</code>
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => void copyToken(selectedProject.ingestToken)}
+                  >
+                    {copied ? 'Kopyalandı' : 'Kopyala'}
+                  </button>
+                  <span className="ingest__hint">
+                    Pipeline / SDK bu token'ı <span className="mono">x-covora-token</span> ile gönderir.
+                  </span>
+                </div>
+              )}
+
               <nav className="tabs">
                 <button
                   type="button"

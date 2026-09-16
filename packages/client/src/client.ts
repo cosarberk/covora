@@ -16,6 +16,8 @@ export interface CovoraClientConfig {
   readonly serverUrl: string
   /** Review edilen projenin anahtarı. */
   readonly projectKey: string
+  /** Projenin ingest token'ı (studio'dan alınır). */
+  readonly ingestToken: string
 }
 
 /** Bir review isteğinin parametreleri. */
@@ -50,7 +52,7 @@ export const createCovoraClient = (config: CovoraClientConfig): CovoraClient => 
   const review = async (params: ReviewRequestParams): Promise<CreateReviewResponse> => {
     const response = await fetch(`${config.serverUrl}/reviews`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-covora-token': config.ingestToken },
       body: JSON.stringify({
         projectKey: config.projectKey,
         codeHash: params.codeHash,

@@ -6,20 +6,23 @@
 
 import {
   coverageConfigSchema,
+  userRoleSchema,
   type AuditRecord,
   type CoverageConfig,
   type GatePolicy,
   type ManagementRule,
   type Pack,
   type ProviderConfig,
-  type Rule
+  type Rule,
+  type User
 } from '@covora/types'
 import type {
   Pack as PrismaPack,
   ProjectConfig as PrismaProjectConfig,
   ProviderConfig as PrismaProviderConfig,
   RuleAudit as PrismaRuleAudit,
-  Rule as PrismaRule
+  Rule as PrismaRule,
+  User as PrismaUser
 } from '@prisma/client'
 
 /**
@@ -118,6 +121,18 @@ export const toProviderConfig = (provider: PrismaProviderConfig): ProviderConfig
   baseUrl: provider.baseUrl,
   model: provider.model,
   active: provider.active
+})
+
+/**
+ * Prisma kullanıcısını domain modeline dönüştürür. Parola hash'i çıkarılmaz.
+ *
+ * @param user - Prisma kullanıcı kaydı.
+ * @returns {@link User}.
+ */
+export const toUser = (user: PrismaUser): User => ({
+  id: user.id,
+  email: user.email,
+  role: userRoleSchema.catch('admin').parse(user.role)
 })
 
 export const toAuditRecord = (audit: PrismaRuleAudit): AuditRecord => ({

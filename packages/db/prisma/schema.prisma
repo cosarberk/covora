@@ -36,14 +36,26 @@ enum ChecklistOutcome {
 
 /// Review edilen bir birim (plugin / repo).
 model Project {
-  id        String         @id @default(cuid())
-  key       String         @unique
-  name      String
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  packs     ProjectPack[]
-  reviews   Review[]
-  config    ProjectConfig?
+  id          String         @id @default(cuid())
+  key         String         @unique
+  name        String
+  /// Makine istemcilerinin (pipeline CLI / SDK) review göndermek için kullandığı gizli token.
+  ingestToken String         @unique @default(cuid())
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  packs       ProjectPack[]
+  reviews     Review[]
+  config      ProjectConfig?
+}
+
+/// Studio kullanıcısı. Kimlik doğrulama (JWT) için.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         String   @default("admin")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 /// Review Pack: bir kural koleksiyonu (tür: ui/code). Projeler pack'lere abone olur.

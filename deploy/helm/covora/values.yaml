@@ -40,6 +40,13 @@ ollama:
       cpu: '16'
       memory: 16Gi
 
+# Kimlik doğrulama. secret'ı üretimde MUTLAKA değiştirin (en az 16 karakter).
+# İlk kurulumda admin kullanıcı (email+parola) hiç kullanıcı yoksa seed edilir.
+auth:
+  secret: 'covora-degistir-bu-gizli-anahtari'
+  adminEmail: 'admin@covora.local'
+  adminPassword: 'covora-admin'
+
 # Tek servis: Fastify API + gömülü studio (React static) aynı porttan.
 server:
   replicas: 1

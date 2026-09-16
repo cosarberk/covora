@@ -2,7 +2,8 @@
  * @module @covora/server/app
  *
  * Fastify uygulamasının kurulumu ve route kaydı. Bağımlılıklar dışarıdan
- * verilir; böylece test ve bootstrap ayrışır.
+ * verilir; böylece test ve bootstrap ayrışır. Yönetim uç noktaları kullanıcı
+ * JWT'si, review ingest'i ise proje bazlı token ile korunur.
  */
 
 import { existsSync } from 'node:fs'
@@ -11,6 +12,8 @@ import path from 'node:path'
 import fastifyStatic from '@fastify/static'
 import Fastify, { type FastifyInstance } from 'fastify'
 
+import { makeIngestGuard, makeUserGuard, type IngestGuardDeps } from './auth/guard.js'
+import { registerAuthRoutes, type AuthDeps } from './routes/auth.js'
 import { registerChatRoutes, type ChatDeps } from './routes/chat.js'
 import { registerHealthRoutes } from './routes/health.js'
 import { registerManagementRoutes } from './routes/management.js'
@@ -26,6 +29,10 @@ export interface AppDeps {
   readonly managementDeps: ManagementDeps
   /** İnteraktif sohbet bağımlılıkları. */
   readonly chatDeps: ChatDeps
+  /** Kimlik doğrulama bağımlılıkları. */
+  readonly authDeps: AuthDeps
+  /** Review ingest guard bağımlılıkları. */
+  readonly ingestDeps: IngestGuardDeps
 }
 
 /**
@@ -37,10 +44,23 @@ export interface AppDeps {
 export const buildApp = (deps: AppDeps): FastifyInstance => {
   const app = Fastify({ logger: true })
 
+  // Herkese açık: sağlık ve giriş.
   registerHealthRoutes(app)
-  registerReviewRoutes(app, deps.reviewDeps)
-  registerManagementRoutes(app, deps.managementDeps)
-  registerChatRoutes(app, deps.chatDeps)
+  registerAuthRoutes(app, deps.authDeps)
+
+  // Review ingest: proje bazlı token ile korunur (makine istemcileri).
+  void app.register(async (scope) => {
+    scope.addHook('preHandler', makeIngestGuard(deps.ingestDeps))
+    registerReviewRoutes(scope, deps.reviewDeps)
+  })
+
+  // Yönetim ve sohbet: kullanıcı JWT'si ile korunur (studio).
+  void app.register(async (scope) => {
+    scope.addHook('preHandler', makeUserGuard(deps.authDeps.secret))
+    scope.get('/auth/me', async (request) => ({ user: request.user ?? null }))
+    registerManagementRoutes(scope, deps.managementDeps)
+    registerChatRoutes(scope, deps.chatDeps)
+  })
 
   // Studio (React) statik dosyalarını aynı sunucudan serve et (tek image).
   // Dizin yoksa (geliştirmede studio ayrı Vite sunucusu) atlanır.

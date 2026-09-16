@@ -32,6 +32,12 @@ spec:
               value: 'http://ollama:11434'
             - name: OLLAMA_CODE_MODEL
               value: {{ .Values.ollama.models.code | quote }}
+            - name: COVORA_AUTH_SECRET
+              value: {{ .Values.auth.secret | quote }}
+            - name: COVORA_ADMIN_EMAIL
+              value: {{ .Values.auth.adminEmail | quote }}
+            - name: COVORA_ADMIN_PASSWORD
+              value: {{ .Values.auth.adminPassword | quote }}
           resources: {{- toYaml .Values.server.resources | nindent 12 }}
           readinessProbe:
             httpGet:

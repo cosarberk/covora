@@ -20,7 +20,13 @@ const envSchema = z.object({
   /** Code review için Ollama adresi. */
   OLLAMA_CODE_BASE_URL: z.url(),
   /** Code review modeli. */
-  OLLAMA_CODE_MODEL: z.string().min(1)
+  OLLAMA_CODE_MODEL: z.string().min(1),
+  /** JWT imzalama anahtarı (en az 16 karakter). */
+  COVORA_AUTH_SECRET: z.string().min(16),
+  /** İlk kurulumda oluşturulacak admin e-postası (opsiyonel). */
+  COVORA_ADMIN_EMAIL: z.string().min(1).optional(),
+  /** İlk kurulumda oluşturulacak admin parolası (opsiyonel). */
+  COVORA_ADMIN_PASSWORD: z.string().min(1).optional()
 })
 
 /** Doğrulanmış ortam yapılandırması. */
