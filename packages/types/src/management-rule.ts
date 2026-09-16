@@ -30,7 +30,9 @@ export const managementRuleSchema = z.object({
   /** Coverage ağırlığı. */
   weight: z.number(),
   /** Kuralın etkin olup olmadığı. */
-  enabled: z.boolean()
+  enabled: z.boolean(),
+  /** Kuralın ait olduğu pack kimliği. */
+  packId: z.string().min(1)
 })
 
 /** {@link managementRuleSchema} tip çıkarımı. */

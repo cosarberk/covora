@@ -11,7 +11,7 @@ import { toCoverageConfig, toDomainRule, toGatePolicy } from './mappers.js'
 
 const prismaRule: PrismaRule = {
   id: 'cuid-1',
-  projectId: null,
+  packId: 'pack-1',
   key: 'r-key',
   title: 'Başlık',
   description: 'Açıklama',

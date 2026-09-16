@@ -9,20 +9,28 @@ import { builtinCodeCheckers } from '@covora/checkers'
 import type { LlmProvider } from '@covora/core'
 import { createOllamaChat, createOllamaProvider } from '@covora/provider-ollama'
 import {
+  assignPackToProject,
+  createPack,
   createPrismaClient,
   createProvider as createProviderRecord,
   createRule,
+  deletePack,
   deleteProjectByKey,
   deleteProvider,
+  ensureBuiltinPacks,
   findProjectByKey,
   getActiveProvider,
   getEffectiveConfig,
   listEnabledRules,
   listManagementRules,
+  listPacks,
+  listPacksByProject,
   listProjects,
   listProviders,
   listRecentReviews,
   listRuleAudits,
+  listRulesByPack,
+  removePackFromProject,
   saveReview,
   setActiveProvider,
   updateRuleWithAudit,
@@ -44,6 +52,9 @@ const start = async (): Promise<void> => {
   const env = loadEnv()
   const prisma = createPrismaClient()
   const envProvider = createProviderFactory(env)
+
+  // Yerleşik pack'leri ve kurallarını hazırla (idempotent).
+  await ensureBuiltinPacks(prisma)
 
   // Aktif sağlayıcı DB'de tanımlıysa onu, yoksa env'deki varsayılanı kullan.
   const resolveProvider = async (kind: ReviewKind): Promise<LlmProvider> => {
@@ -74,6 +85,13 @@ const start = async (): Promise<void> => {
       })),
     deleteProject: (key) => deleteProjectByKey(prisma, key),
     listRules: (projectId) => listManagementRules(prisma, projectId),
+    listPacks: () => listPacks(prisma),
+    listPacksByProject: (projectId) => listPacksByProject(prisma, projectId),
+    createPack: (input) => createPack(prisma, input),
+    deletePack: (id) => deletePack(prisma, id),
+    assignPackToProject: (projectId, packId) => assignPackToProject(prisma, projectId, packId),
+    removePackFromProject: (projectId, packId) => removePackFromProject(prisma, projectId, packId),
+    listRulesByPack: (packId) => listRulesByPack(prisma, packId),
     createRule: (data, changedBy) => createRule(prisma, data, changedBy),
     updateRule: (ruleId, patch, changedBy) => updateRuleWithAudit(prisma, ruleId, patch, changedBy),
     listRuleAudits: (ruleId) => listRuleAudits(prisma, ruleId),

@@ -5,10 +5,11 @@
  * Bağımlılıklar dışarıdan enjekte edilir.
  */
 
-import type { CreateRuleData, ProviderInput } from '@covora/db'
+import type { CreateRuleData, PackInput, ProviderInput } from '@covora/db'
 import type {
   AuditRecord,
   ManagementRule,
+  Pack,
   ProviderConfig,
   ReviewKind,
   Rule,
@@ -53,8 +54,22 @@ export interface ManagementDeps {
   readonly listProjects: () => Promise<readonly ProjectRecord[]>
   /** Bir projeyi anahtarına göre siler. */
   readonly deleteProject: (key: string) => Promise<void>
-  /** Projenin (ve global) tüm kurallarını yönetim modeli olarak getirir. */
+  /** Projenin abone olduğu pack'lerdeki tüm kuralları yönetim modeli olarak getirir. */
   readonly listRules: (projectId: string) => Promise<readonly ManagementRule[]>
+  /** Tüm pack'leri listeler. */
+  readonly listPacks: () => Promise<readonly Pack[]>
+  /** Projenin abone olduğu pack'leri listeler. */
+  readonly listPacksByProject: (projectId: string) => Promise<readonly Pack[]>
+  /** Yeni pack oluşturur. */
+  readonly createPack: (input: PackInput) => Promise<Pack>
+  /** Bir pack'i siler (yerleşik olmayanlar). */
+  readonly deletePack: (id: string) => Promise<void>
+  /** Bir projeyi bir pack'e abone eder. */
+  readonly assignPackToProject: (projectId: string, packId: string) => Promise<void>
+  /** Bir projenin bir pack aboneliğini kaldırır. */
+  readonly removePackFromProject: (projectId: string, packId: string) => Promise<void>
+  /** Bir pack'in kurallarını yönetim modeli olarak getirir. */
+  readonly listRulesByPack: (packId: string) => Promise<readonly ManagementRule[]>
   /** Yeni kural oluşturur (audit'li). */
   readonly createRule: (data: CreateRuleData, changedBy: string) => Promise<Rule>
   /** Kuralı günceller (audit'li). */

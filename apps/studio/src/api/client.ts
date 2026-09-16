@@ -7,6 +7,7 @@
 import type {
   AuditRecord,
   ManagementRule,
+  Pack,
   ProviderConfig,
   ReviewKind,
   Rule,
@@ -47,6 +48,15 @@ export interface CreateRuleInput {
   readonly evaluation: RuleEvaluationType
   readonly severity: Severity
   readonly weight: number
+  readonly prompt?: string | null
+}
+
+/** Yeni pack oluşturma girdisi. */
+export interface CreatePackInput {
+  readonly key: string
+  readonly name: string
+  readonly description?: string
+  readonly kind: ReviewKind
 }
 
 /** Yeni sağlayıcı girdisi. */
@@ -75,11 +85,18 @@ export interface StudioApi {
   activateProvider(id: string): Promise<void>
   deleteProvider(id: string): Promise<void>
   listRules(projectKey: string): Promise<readonly ManagementRule[]>
-  createRule(projectKey: string, input: CreateRuleInput): Promise<Rule>
   updateRule(ruleId: string, patch: UpdateRuleInput): Promise<void>
   listAudits(ruleId: string): Promise<readonly AuditRecord[]>
   listReviews(projectKey: string): Promise<readonly ReviewRecord[]>
   upsertProject(key: string, name: string): Promise<ProjectSummary>
+  listPacks(): Promise<readonly Pack[]>
+  createPack(input: CreatePackInput): Promise<Pack>
+  deletePack(id: string): Promise<void>
+  listPackRules(packId: string): Promise<readonly ManagementRule[]>
+  createPackRule(packId: string, input: CreateRuleInput): Promise<Rule>
+  listProjectPacks(projectKey: string): Promise<readonly Pack[]>
+  assignPack(projectKey: string, packId: string): Promise<void>
+  removePack(projectKey: string, packId: string): Promise<void>
 }
 
 /**
@@ -157,16 +174,6 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
       return data.rules
     },
 
-    async createRule(projectKey, input) {
-      return parseJson<Rule>(
-        await fetch(url(`${projectPath(projectKey)}/rules`), {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(input)
-        })
-      )
-    },
-
     async updateRule(ruleId, patch) {
       const response = await fetch(url(`/rules/${encodeURIComponent(ruleId)}`), {
         method: 'PATCH',
@@ -200,6 +207,73 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
           body: JSON.stringify({ key, name })
         })
       )
+    },
+
+    async listPacks() {
+      const data = await parseJson<{ packs: Pack[] }>(await fetch(url('/packs')))
+      return data.packs
+    },
+
+    async createPack(input) {
+      return parseJson<Pack>(
+        await fetch(url('/packs'), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input)
+        })
+      )
+    },
+
+    async deletePack(id) {
+      const response = await fetch(url(`/packs/${encodeURIComponent(id)}`), { method: 'DELETE' })
+      if (!response.ok) {
+        throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
+      }
+    },
+
+    async listPackRules(packId) {
+      const data = await parseJson<{ rules: ManagementRule[] }>(
+        await fetch(url(`/packs/${encodeURIComponent(packId)}/rules`))
+      )
+      return data.rules
+    },
+
+    async createPackRule(packId, input) {
+      return parseJson<Rule>(
+        await fetch(url(`/packs/${encodeURIComponent(packId)}/rules`), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input)
+        })
+      )
+    },
+
+    async listProjectPacks(projectKey) {
+      const data = await parseJson<{ packs: Pack[] }>(
+        await fetch(url(`${projectPath(projectKey)}/packs`))
+      )
+      return data.packs
+    },
+
+    async assignPack(projectKey, packId) {
+      const response = await fetch(url(`${projectPath(projectKey)}/packs`), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ packId })
+      })
+      if (!response.ok) {
+        throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
+      }
+    },
+
+    async removePack(projectKey, packId) {
+      const response = await fetch(
+        url(`${projectPath(projectKey)}/packs/${encodeURIComponent(packId)}`),
+        { method: 'DELETE' }
+      )
+      if (!response.ok) {
+        throw new Error(`İstek başarısız: ${response.status} ${response.statusText}`)
+      }
     }
   }
 }

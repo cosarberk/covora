@@ -28,6 +28,17 @@ const createRuleBodySchema = z.object({
   enabled: z.boolean().optional()
 })
 
+const createPackBodySchema = z.object({
+  key: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  kind: reviewKindSchema
+})
+
+const assignPackBodySchema = z.object({
+  packId: z.string().min(1)
+})
+
 const createProviderBodySchema = z.object({
   name: z.string().min(1),
   kind: reviewKindSchema,
@@ -90,20 +101,43 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
     return reply.send({ rules: await deps.listRules(project.id) })
   })
 
-  app.post('/projects/:key/rules', async (request, reply) => {
-    const { key } = request.params as { key: string }
+  app.get('/packs', async () => ({ packs: await deps.listPacks() }))
+
+  app.post('/packs', async (request, reply) => {
+    const parsed = createPackBodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
+    }
+    const pack = await deps.createPack({
+      key: parsed.data.key,
+      name: parsed.data.name,
+      kind: parsed.data.kind,
+      ...(parsed.data.description !== undefined ? { description: parsed.data.description } : {})
+    })
+    return reply.status(201).send(pack)
+  })
+
+  app.delete('/packs/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    await deps.deletePack(id)
+    return reply.status(204).send()
+  })
+
+  app.get('/packs/:id/rules', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return reply.send({ rules: await deps.listRulesByPack(id) })
+  })
+
+  app.post('/packs/:id/rules', async (request, reply) => {
+    const { id } = request.params as { id: string }
     const parsed = createRuleBodySchema.safeParse(request.body)
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
     }
-    const project = await deps.findProjectByKey(key)
-    if (project === null) {
-      return reply.status(404).send({ error: `Proje bulunamadı: ${key}` })
-    }
 
     const rule = await deps.createRule(
       {
-        projectId: project.id,
+        packId: id,
         key: parsed.data.key,
         title: parsed.data.title,
         kind: parsed.data.kind,
@@ -117,6 +151,39 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
       getActor(request)
     )
     return reply.status(201).send(rule)
+  })
+
+  app.get('/projects/:key/packs', async (request, reply) => {
+    const { key } = request.params as { key: string }
+    const project = await deps.findProjectByKey(key)
+    if (project === null) {
+      return reply.status(404).send({ error: `Proje bulunamadı: ${key}` })
+    }
+    return reply.send({ packs: await deps.listPacksByProject(project.id) })
+  })
+
+  app.post('/projects/:key/packs', async (request, reply) => {
+    const { key } = request.params as { key: string }
+    const parsed = assignPackBodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
+    }
+    const project = await deps.findProjectByKey(key)
+    if (project === null) {
+      return reply.status(404).send({ error: `Proje bulunamadı: ${key}` })
+    }
+    await deps.assignPackToProject(project.id, parsed.data.packId)
+    return reply.status(204).send()
+  })
+
+  app.delete('/projects/:key/packs/:packId', async (request, reply) => {
+    const { key, packId } = request.params as { key: string; packId: string }
+    const project = await deps.findProjectByKey(key)
+    if (project === null) {
+      return reply.status(404).send({ error: `Proje bulunamadı: ${key}` })
+    }
+    await deps.removePackFromProject(project.id, packId)
+    return reply.status(204).send()
   })
 
   app.patch('/rules/:id', async (request, reply) => {

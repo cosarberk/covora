@@ -8,6 +8,8 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { createStudioApi, type ProjectSummary } from './api/client.js'
+import { PacksPanel } from './components/PacksPanel.js'
+import { ProjectPacksPanel } from './components/ProjectPacksPanel.js'
 import { ProvidersPanel } from './components/ProvidersPanel.js'
 import { ReviewsPanel } from './components/ReviewsPanel.js'
 import { RulesPanel } from './components/RulesPanel.js'
@@ -16,17 +18,23 @@ import { RulesPanel } from './components/RulesPanel.js'
 const serverUrl = import.meta.env.VITE_COVORA_SERVER_URL ?? ''
 const api = createStudioApi({ baseUrl: serverUrl })
 
-type Tab = 'rules' | 'reviews'
+type Tab = 'packs' | 'rules' | 'reviews'
+type View = 'project' | 'providers' | 'packs'
 
 /** Studio uygulaması. */
 export const App = (): React.JSX.Element => {
   const [projects, setProjects] = useState<readonly ProjectSummary[]>([])
   const [selected, setSelected] = useState<string | null>(null)
-  const [view, setView] = useState<'project' | 'providers'>('project')
-  const [tab, setTab] = useState<Tab>('rules')
+  const [view, setView] = useState<View>('project')
+  const [tab, setTab] = useState<Tab>('packs')
   const [error, setError] = useState<string | null>(null)
   const [newKey, setNewKey] = useState('')
   const [newName, setNewName] = useState('')
+
+  const loadProjectRules = useCallback(
+    () => (selected === null ? Promise.resolve([]) : api.listRules(selected)),
+    [selected]
+  )
 
   const loadProjects = useCallback(async (): Promise<void> => {
     setError(null)
@@ -135,6 +143,13 @@ export const App = (): React.JSX.Element => {
 
           <button
             type="button"
+            className={view === 'packs' ? 'nav-item nav-item--active' : 'nav-item'}
+            onClick={() => setView('packs')}
+          >
+            📦 Review Paketleri
+          </button>
+          <button
+            type="button"
             className={view === 'providers' ? 'nav-item nav-item--active' : 'nav-item'}
             onClick={() => setView('providers')}
           >
@@ -147,11 +162,20 @@ export const App = (): React.JSX.Element => {
 
           {view === 'providers' ? (
             <ProvidersPanel api={api} />
+          ) : view === 'packs' ? (
+            <PacksPanel api={api} />
           ) : selected === null ? (
             <div className="state">Soldan bir proje seç ya da yeni proje oluştur.</div>
           ) : (
             <>
               <nav className="tabs">
+                <button
+                  type="button"
+                  className={tab === 'packs' ? 'tab tab--active' : 'tab'}
+                  onClick={() => setTab('packs')}
+                >
+                  Paketler
+                </button>
                 <button
                   type="button"
                   className={tab === 'rules' ? 'tab tab--active' : 'tab'}
@@ -168,8 +192,14 @@ export const App = (): React.JSX.Element => {
                 </button>
               </nav>
 
-              {tab === 'rules' ? (
-                <RulesPanel api={api} projectKey={selected} />
+              {tab === 'packs' ? (
+                <ProjectPacksPanel api={api} projectKey={selected} />
+              ) : tab === 'rules' ? (
+                <RulesPanel
+                  api={api}
+                  loadRules={loadProjectRules}
+                  emptyLabel="Bu proje bir pack'e abone değil ya da abone pack'lerde kural yok."
+                />
               ) : (
                 <ReviewsPanel api={api} projectKey={selected} />
               )}

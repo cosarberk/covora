@@ -10,10 +10,12 @@ import {
   type CoverageConfig,
   type GatePolicy,
   type ManagementRule,
+  type Pack,
   type ProviderConfig,
   type Rule
 } from '@covora/types'
 import type {
+  Pack as PrismaPack,
   ProjectConfig as PrismaProjectConfig,
   ProviderConfig as PrismaProviderConfig,
   RuleAudit as PrismaRuleAudit,
@@ -54,7 +56,23 @@ export const toManagementRule = (rule: PrismaRule): ManagementRule => ({
   evaluation: rule.evaluation,
   severity: rule.severity,
   weight: rule.weight,
-  enabled: rule.enabled
+  enabled: rule.enabled,
+  packId: rule.packId
+})
+
+/**
+ * Prisma pack kaydını domain modeline dönüştürür.
+ *
+ * @param pack - Prisma pack kaydı.
+ * @returns {@link Pack}.
+ */
+export const toPack = (pack: PrismaPack): Pack => ({
+  id: pack.id,
+  key: pack.key,
+  name: pack.name,
+  description: pack.description,
+  kind: pack.kind,
+  builtin: pack.builtin
 })
 
 /**

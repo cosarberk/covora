@@ -379,3 +379,26 @@ body {
   font-size: 13px;
   white-space: nowrap;
 }
+
+.nav-item + .nav-item {
+  margin-top: 0;
+}
+
+.row--active > td {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.04));
+}
+
+.pack-rules {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.pack-rules__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: var(--text);
+}
