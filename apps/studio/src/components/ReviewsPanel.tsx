@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import type { ReviewRecord, StudioApi } from '../api/client.js'
+import { DeltaBadge } from './DeltaBadge.js'
 
 /** {@link ReviewsPanel} props. */
 export interface ReviewsPanelProps {
@@ -104,6 +105,7 @@ export const ReviewsPanel = ({ api, projectKey }: ReviewsPanelProps): React.JSX.
             <th>Tarih</th>
           <th>Tür</th>
           <th>Skor</th>
+          <th>Δ</th>
           <th>Seviye</th>
           <th>Gate</th>
           <th>Kod Hash</th>
@@ -117,6 +119,9 @@ export const ReviewsPanel = ({ api, projectKey }: ReviewsPanelProps): React.JSX.
               <span className="badge">{review.kind}</span>
             </td>
             <td className="score">{review.score.toFixed(1)}</td>
+            <td>
+              <DeltaBadge delta={review.delta} />
+            </td>
             <td>{review.level}</td>
             <td>
               <span className={review.gatePassed ? 'badge badge--pass' : 'badge badge--fail'}>

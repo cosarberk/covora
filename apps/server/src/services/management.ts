@@ -44,6 +44,8 @@ export interface ReviewRecord {
   readonly score: number
   readonly level: string
   readonly gatePassed: boolean
+  /** Önceki aynı tür review'a göre skor farkı (ilk review'da null). */
+  readonly delta: number | null
   readonly createdAt: string
 }
 

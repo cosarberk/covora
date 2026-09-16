@@ -17,6 +17,30 @@ export interface SaveReviewInput {
   readonly codeHash: string
   /** Uçtan uca review sonucu (coverage + gate). */
   readonly outcome: ReviewOutcome
+  /** Önceki aynı tür review'a göre skor farkı (ilk review'da null). */
+  readonly delta?: number | null
+}
+
+/**
+ * Bir projenin verilen tür için en son review skorunu getirir (regresyon
+ * karşılaştırması için).
+ *
+ * @param prisma - Prisma client.
+ * @param projectId - Proje kimliği.
+ * @param kind - Review türü.
+ * @returns Son skor ya da hiç review yoksa null.
+ */
+export const getLatestReviewScore = async (
+  prisma: PrismaClient,
+  projectId: string,
+  kind: ReviewKind
+): Promise<number | null> => {
+  const latest = await prisma.review.findFirst({
+    where: { projectId, kind },
+    orderBy: { createdAt: 'desc' },
+    select: { score: true }
+  })
+  return latest?.score ?? null
 }
 
 /**
@@ -35,6 +59,7 @@ export const saveReview = async (prisma: PrismaClient, input: SaveReviewInput): 
       score: input.outcome.coverage.score,
       level: input.outcome.coverage.level,
       gatePassed: input.outcome.gate.passed,
+      delta: input.delta ?? null,
       results: {
         create: input.outcome.coverage.ruleResults.map((result) =>
           result.note !== undefined

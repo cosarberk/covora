@@ -9,6 +9,7 @@ import type { DashboardSummary } from '@covora/types'
 import { useCallback, useEffect, useState } from 'react'
 
 import type { StudioApi } from '../api/client.js'
+import { DeltaBadge } from './DeltaBadge.js'
 
 /** {@link DashboardPanel} props. */
 export interface DashboardPanelProps {
@@ -86,6 +87,7 @@ export const DashboardPanel = ({ api, onOpenProject }: DashboardPanelProps): Rea
               <th>Proje</th>
               <th>Tür</th>
               <th>Coverage</th>
+              <th>Δ</th>
               <th>Seviye</th>
               <th>Gate</th>
               <th>Tarih</th>
@@ -107,6 +109,9 @@ export const DashboardPanel = ({ api, onOpenProject }: DashboardPanelProps): Rea
                   <span className="badge">{review.kind}</span>
                 </td>
                 <td className="mono">{review.score.toFixed(1)}</td>
+                <td>
+                  <DeltaBadge delta={review.delta} />
+                </td>
                 <td>{review.level}</td>
                 <td>
                   <span className={review.gatePassed ? 'badge badge--pass' : 'badge badge--fail'}>

@@ -99,7 +99,9 @@ export const toCoverageConfig = (config: PrismaProjectConfig): CoverageConfig =>
  */
 export const toGatePolicy = (config: PrismaProjectConfig): GatePolicy => ({
   minScore: config.gateMinScore,
-  blockOnFailedBlockers: config.gateBlockOnFailedBlockers
+  blockOnFailedBlockers: config.gateBlockOnFailedBlockers,
+  blockOnRegression: config.gateBlockOnRegression,
+  regressionThreshold: config.regressionThreshold
 })
 
 /**

@@ -24,6 +24,7 @@ import {
   findUserByEmail,
   getActiveProvider,
   getDashboardSummary,
+  getLatestReviewScore,
   getEffectiveConfig,
   listEnabledRules,
   listManagementRules,
@@ -87,6 +88,7 @@ const start = async (): Promise<void> => {
     listEnabledRules: (projectId, kind) => listEnabledRules(prisma, projectId, kind),
     getEffectiveConfig: (projectId) => getEffectiveConfig(prisma, projectId),
     createProvider: resolveProvider,
+    getLatestScore: (projectId, kind) => getLatestReviewScore(prisma, projectId, kind),
     saveReview: (input) => saveReview(prisma, input),
     checkers: builtinCodeCheckers
   }
@@ -129,6 +131,7 @@ const start = async (): Promise<void> => {
         score: review.score,
         level: review.level,
         gatePassed: review.gatePassed,
+        delta: review.delta,
         createdAt: review.createdAt.toISOString()
       })),
     getDashboard: () => getDashboardSummary(prisma),

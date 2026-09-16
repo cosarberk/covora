@@ -36,6 +36,7 @@ const buildDeps = (): CreateReviewDeps => ({
     gatePolicy: defaultGatePolicy
   })),
   createProvider: vi.fn(async () => passingProvider),
+  getLatestScore: vi.fn(async () => null),
   saveReview: vi.fn(async () => 'review-1')
 })
 
@@ -53,6 +54,33 @@ describe('createReview', () => {
     expect(result.coverage.score).toBe(100)
     expect(result.gate.passed).toBe(true)
     expect(deps.saveReview).toHaveBeenCalledOnce()
+  })
+
+  it('regresyon eşiği aşılınca ve politika açıkken gate bloklanır', async () => {
+    const failingProvider: LlmProvider = {
+      kind: 'ui',
+      fillChecklist: async (_input, items: readonly ChecklistItem[]) =>
+        items.map((item) => ({ ruleId: item.ruleId, outcome: 'fail' as const }))
+    }
+    const deps: CreateReviewDeps = {
+      ...buildDeps(),
+      createProvider: vi.fn(async () => failingProvider),
+      getLatestScore: vi.fn(async () => 100),
+      getEffectiveConfig: vi.fn(async () => ({
+        coverageConfig: defaultCoverageConfig,
+        gatePolicy: { ...defaultGatePolicy, blockOnRegression: true, regressionThreshold: 5 }
+      }))
+    }
+
+    const result = await createReview(deps, {
+      projectKey: 'my-plugin',
+      input: uiInput,
+      codeHash: 'abc123'
+    })
+
+    expect(result.delta).toBe(-100)
+    expect(result.gate.passed).toBe(false)
+    expect(result.gate.reasons.some((reason) => reason.includes('regresyon'))).toBe(true)
   })
 
   it('proje bulunamazsa ProjectNotFoundError fırlatır', async () => {

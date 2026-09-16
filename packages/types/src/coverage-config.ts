@@ -43,7 +43,11 @@ export const gatePolicySchema = z.object({
   /** Merge için gereken asgari coverage skoru (0-100). */
   minScore: z.number().min(0).max(100),
   /** `true` ise uyumsuz bir blocker kural tek başına merge'i durdurur. */
-  blockOnFailedBlockers: z.boolean()
+  blockOnFailedBlockers: z.boolean(),
+  /** `true` ise coverage regresyonu (önceki review'a göre düşüş) merge'i durdurur. */
+  blockOnRegression: z.boolean().default(false),
+  /** Regresyon sayılması için gereken en az puan düşüşü (pozitif değer). */
+  regressionThreshold: z.number().min(0).default(5)
 })
 
 /** {@link gatePolicySchema} tip çıkarımı. */

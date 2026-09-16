@@ -25,7 +25,12 @@ const makeCoverage = (overrides: Partial<CoverageResult> = {}): CoverageResult =
   ...overrides
 })
 
-const policy: GatePolicy = { minScore: 60, blockOnFailedBlockers: true }
+const policy: GatePolicy = {
+  minScore: 60,
+  blockOnFailedBlockers: true,
+  blockOnRegression: false,
+  regressionThreshold: 5
+}
 
 describe('evaluateGate', () => {
   it('skor eşiğin üstünde ve blocker yoksa geçer', () => {
@@ -56,7 +61,9 @@ describe('evaluateGate', () => {
   it('blockOnFailedBlockers false ise blocker varsa bile skor yeterse geçer', () => {
     const decision = evaluateGate(makeCoverage({ score: 95, failedBlockers: ['a'] }), {
       minScore: 60,
-      blockOnFailedBlockers: false
+      blockOnFailedBlockers: false,
+      blockOnRegression: false,
+      regressionThreshold: 5
     })
 
     expect(decision.passed).toBe(true)

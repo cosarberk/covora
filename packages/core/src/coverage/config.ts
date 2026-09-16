@@ -28,5 +28,7 @@ export const defaultCoverageConfig: CoverageConfig = {
  */
 export const defaultGatePolicy: GatePolicy = {
   minScore: 60,
-  blockOnFailedBlockers: true
+  blockOnFailedBlockers: true,
+  blockOnRegression: false,
+  regressionThreshold: 5
 }

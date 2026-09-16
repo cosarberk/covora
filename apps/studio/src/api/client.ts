@@ -42,6 +42,7 @@ export interface ReviewRecord {
   readonly score: number
   readonly level: string
   readonly gatePassed: boolean
+  readonly delta: number | null
   readonly createdAt: string
 }
 

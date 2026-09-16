@@ -37,6 +37,8 @@ export const dashboardRecentReviewSchema = z.object({
   score: z.number(),
   level: z.string(),
   gatePassed: z.boolean(),
+  /** Önceki aynı tür review'a göre skor farkı (ilk review'da null). */
+  delta: z.number().nullable(),
   createdAt: z.string()
 })
 

@@ -34,7 +34,9 @@ const prismaConfig: PrismaProjectConfig = {
     { id: 'poor', minScore: 0 }
   ],
   gateMinScore: 60,
-  gateBlockOnFailedBlockers: true
+  gateBlockOnFailedBlockers: true,
+  gateBlockOnRegression: false,
+  regressionThreshold: 5
 }
 
 describe('toDomainRule', () => {

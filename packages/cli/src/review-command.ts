@@ -26,6 +26,7 @@ export interface ReviewCommandOptions {
 
 interface CreateReviewResponse extends ReviewOutcome {
   readonly reviewId: string
+  readonly delta: number | null
 }
 
 /** Çıkış kodları: 0 geçti, 1 gate kaldı, 2 çalıştırma hatası. */
@@ -74,6 +75,10 @@ export const runReviewCommand = async (
 
   const outcome = (await response.json()) as CreateReviewResponse
   log(`Coverage: ${outcome.coverage.score.toFixed(1)} (${outcome.coverage.level})`)
+  if (typeof outcome.delta === 'number') {
+    const sign = outcome.delta >= 0 ? '+' : ''
+    log(`Önceki review'a göre: ${sign}${outcome.delta.toFixed(1)} puan`)
+  }
   log(`Gate: ${outcome.gate.passed ? 'GEÇTİ' : 'KALDI'}`)
 
   if (!outcome.gate.passed) {

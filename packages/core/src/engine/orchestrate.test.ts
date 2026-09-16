@@ -38,7 +38,12 @@ const makeRule = (overrides: Partial<Rule> & Pick<Rule, 'id'>): Rule => ({
 
 const uiInput: ReviewInput = { kind: 'ui', screenshot: 'data' }
 
-const policy = { minScore: 60, blockOnFailedBlockers: true }
+const policy = {
+  minScore: 60,
+  blockOnFailedBlockers: true,
+  blockOnRegression: false,
+  regressionThreshold: 5
+}
 
 describe('runReview', () => {
   it('LLM kurallarını sağlayıcıya sorar ve coverage üretir', async () => {

@@ -527,3 +527,21 @@ body {
   font-size: 15px;
   color: var(--text);
 }
+
+/* Coverage delta */
+.delta {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.delta--up {
+  color: var(--pass);
+}
+
+.delta--down {
+  color: var(--fail);
+}
+
+.delta--none {
+  color: var(--text-dim);
+}

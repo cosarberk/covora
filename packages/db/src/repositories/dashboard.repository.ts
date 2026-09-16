@@ -50,6 +50,7 @@ export const getDashboardSummary = async (
       score: review.score,
       level: review.level,
       gatePassed: review.gatePassed,
+      delta: review.delta,
       createdAt: review.createdAt.toISOString()
     }))
   }
