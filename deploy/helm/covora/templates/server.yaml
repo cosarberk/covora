@@ -38,6 +38,8 @@ spec:
               value: {{ .Values.auth.adminEmail | quote }}
             - name: COVORA_ADMIN_PASSWORD
               value: {{ .Values.auth.adminPassword | quote }}
+            - name: COVORA_CORS_ORIGINS
+              value: {{ .Values.auth.corsOrigins | quote }}
           resources: {{- toYaml .Values.server.resources | nindent 12 }}
           readinessProbe:
             httpGet:

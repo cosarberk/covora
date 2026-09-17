@@ -190,7 +190,14 @@ const start = async (): Promise<void> => {
     }
   }
 
-  const app = buildApp({ reviewDeps, managementDeps, chatDeps, authDeps, ingestDeps })
+  const app = buildApp({
+    reviewDeps,
+    managementDeps,
+    chatDeps,
+    authDeps,
+    ingestDeps,
+    ...(env.COVORA_CORS_ORIGINS !== undefined ? { corsOrigins: env.COVORA_CORS_ORIGINS } : {})
+  })
 
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' })
