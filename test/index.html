@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Covora Test Sayfası</title>
+
+    <!-- 1) Covora bağlantı ayarları — kendi değerlerinle doldur -->
+    <script>
+      window.COVORA_CONFIG = {
+        serverUrl: 'https://covora.yeten2.com', // kendi Covora URL'in
+        projectKey: 'test-ui', // studio'da oluşturduğun proje anahtarı
+        ingestToken: 'BURAYA-INGEST-TOKEN' // proje başlığından kopyala
+      }
+    </script>
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      :root {
+        --bg: #0f1220;
+        --card: #171a2b;
+        --border: #262a40;
+        --text: #e7e9f2;
+        --dim: #9aa0bd;
+        --brand: #7c8cf8;
+        --brand-2: #5be0c0;
+      }
+      body {
+        margin: 0;
+        font: 15px/1.6 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        color: var(--text);
+        background: radial-gradient(900px 500px at 80% -10%, rgba(124, 140, 248, 0.18), transparent),
+          var(--bg);
+      }
+      .wrap {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      /* Header */
+      header.site {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        font-size: 18px;
+      }
+      .logo .dot {
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      }
+      nav.site {
+        display: flex;
+        gap: 22px;
+        color: var(--dim);
+        font-size: 14px;
+      }
+      nav.site a {
+        color: var(--dim);
+        text-decoration: none;
+      }
+      nav.site a:hover {
+        color: var(--text);
+      }
+
+      /* Hero */
+      .hero {
+        padding: 64px 0 40px;
+        text-align: center;
+      }
+      .hero h1 {
+        margin: 0 0 14px;
+        font-size: 40px;
+        line-height: 1.15;
+        letter-spacing: -0.03em;
+      }
+      .hero p {
+        margin: 0 auto 28px;
+        max-width: 560px;
+        color: var(--dim);
+        font-size: 17px;
+      }
+      .actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, var(--brand), #6f7ef5);
+        color: #0b0e1a;
+        border: none;
+        border-radius: 10px;
+        padding: 12px 24px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 22px;
+        font-size: 15px;
+        cursor: pointer;
+      }
+
+      /* Feature cards */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+        padding: 24px 0 56px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 22px;
+      }
+      .card .ic {
+        font-size: 24px;
+      }
+      .card h3 {
+        margin: 12px 0 6px;
+        font-size: 17px;
+      }
+      .card p {
+        margin: 0;
+        color: var(--dim);
+        font-size: 14px;
+      }
+
+      footer.site {
+        border-top: 1px solid var(--border);
+        color: var(--dim);
+        font-size: 13px;
+        padding: 22px 0 40px;
+        text-align: center;
+      }
+
+      @media (max-width: 760px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .hero h1 {
+          font-size: 30px;
+        }
+      }
+
+      /* Covora review widget (review kapsamının DIŞINDA) */
+      #covora-widget {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+      }
+      #covora-status {
+        max-width: 320px;
+        background: #10131f;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 13px;
+        color: var(--dim);
+        display: none;
+      }
+      #covora-status.show {
+        display: block;
+      }
+      #covora-review {
+        background: #0b0e1a;
+        color: #fff;
+        border: 1px solid var(--brand);
+        border-radius: 999px;
+        padding: 11px 18px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+      }
+      #covora-review:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Review edilecek asıl sayfa (#page). Widget bunun dışında. -->
+    <div id="page">
+      <div class="wrap">
+        <header class="site">
+          <div class="logo"><span class="dot"></span> Relteco Panel</div>
+          <nav class="site">
+            <a href="#">Ürün</a>
+            <a href="#">Fiyatlar</a>
+            <a href="#">Dokümanlar</a>
+            <a href="#">Giriş</a>
+          </nav>
+        </header>
+
+        <section class="hero">
+          <h1>Ekiplerin için tek panel</h1>
+          <p>
+            Projelerini, kurallarını ve incelemelerini tek yerden yönet. Hızlı kur,
+            dakikalar içinde çalışmaya başla.
+          </p>
+          <div class="actions">
+            <button class="btn-primary">Hemen Başla</button>
+            <button class="btn-ghost">Demoyu İzle</button>
+          </div>
+        </section>
+
+        <section class="grid">
+          <div class="card">
+            <div class="ic">⚡</div>
+            <h3>Hızlı kurulum</h3>
+            <p>Tek komutla ayağa kalkar, yapılandırma derdi yok.</p>
+          </div>
+          <div class="card">
+            <div class="ic">🔒</div>
+            <h3>Güvenli</h3>
+            <p>Rol tabanlı erişim ve denetim kaydı yerleşik gelir.</p>
+          </div>
+          <div class="card">
+            <div class="ic">📊</div>
+            <h3>Ölçülebilir</h3>
+            <p>Her şeyi tek panelden izle, kararlarını veriyle ver.</p>
+          </div>
+        </section>
+
+        <footer class="site">© 2026 Relteco — Test sayfası</footer>
+      </div>
+    </div>
+
+    <!-- Covora review widget -->
+    <div id="covora-widget">
+      <div id="covora-status"></div>
+      <button id="covora-review" type="button">🔍 Covora Review</button>
+    </div>
+
+    <!-- 2) SDK bundle'ı (pnpm --filter @covora/client build → dist'ten kopyala) -->
+    <script src="./covora-client.global.js"></script>
+
+    <!-- 3) Review aksiyonu -->
+    <script>
+      const cfg = window.COVORA_CONFIG
+      const btn = document.getElementById('covora-review')
+      const status = document.getElementById('covora-status')
+
+      const show = (html) => {
+        status.innerHTML = html
+        status.classList.add('show')
+      }
+
+      const client = Covora.createCovoraClient({
+        serverUrl: cfg.serverUrl,
+        projectKey: cfg.projectKey,
+        ingestToken: cfg.ingestToken
+      })
+
+      btn.addEventListener('click', async () => {
+        btn.disabled = true
+        show('Review çalışıyor… (vision kuralı varsa CPU\'da 1-3 dk sürebilir)')
+        try {
+          // Sadece #page'i incele; sağ alttaki widget review'a girmesin.
+          const page = document.getElementById('page')
+          const r = await client.reviewUi('test-' + Date.now(), page)
+          const gate = r.gate.passed
+            ? '<b style="color:#5be0c0">GEÇTİ</b>'
+            : '<b style="color:#f26d6d">KALDI</b>'
+          const reasons = r.gate.reasons.length
+            ? '<br>' + r.gate.reasons.map((x) => '• ' + x).join('<br>')
+            : ''
+          show(
+            `Coverage: <b>${r.coverage.score.toFixed(1)}</b> (${r.coverage.level}) — Gate: ${gate}` +
+              reasons +
+              '<br><span style="color:#6b7385">Detay: Studio → Review Geçmişi</span>'
+          )
+        } catch (e) {
+          show('<b style="color:#f26d6d">Hata:</b> ' + (e && e.message ? e.message : e))
+        } finally {
+          btn.disabled = false
+        }
+      })
+    </script>
+  </body>
+</html>

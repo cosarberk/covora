@@ -46,6 +46,9 @@ auth:
   secret: 'covora-degistir-bu-gizli-anahtari'
   adminEmail: 'admin@covora.local'
   adminPassword: 'covora-admin'
+  # Mock-shell/pipeline gibi farklı origin'lerden gelen review/chat istekleri
+  # için CORS. Üretimde kendi origin'lerinle sınırla (virgülle ayır). '*' = tümü.
+  corsOrigins: '*'
 
 # Tek servis: Fastify API + gömülü studio (React static) aynı porttan.
 server:

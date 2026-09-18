@@ -26,7 +26,12 @@ const envSchema = z.object({
   /** İlk kurulumda oluşturulacak admin e-postası (opsiyonel). */
   COVORA_ADMIN_EMAIL: z.string().min(1).optional(),
   /** İlk kurulumda oluşturulacak admin parolası (opsiyonel). */
-  COVORA_ADMIN_PASSWORD: z.string().min(1).optional()
+  COVORA_ADMIN_PASSWORD: z.string().min(1).optional(),
+  /**
+   * CORS'a izin verilen origin'ler (virgülle ayrılmış). Mock-shell/pipeline gibi
+   * farklı origin'lerden gelen review/chat istekleri için. Boş ya da `*` = tümü.
+   */
+  COVORA_CORS_ORIGINS: z.string().optional()
 })
 
 /** Doğrulanmış ortam yapılandırması. */

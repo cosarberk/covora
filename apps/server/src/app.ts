@@ -9,6 +9,7 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 
+import cors from '@fastify/cors'
 import fastifyStatic from '@fastify/static'
 import Fastify, { type FastifyInstance } from 'fastify'
 
@@ -33,6 +34,8 @@ export interface AppDeps {
   readonly authDeps: AuthDeps
   /** Review ingest guard bağımlılıkları. */
   readonly ingestDeps: IngestGuardDeps
+  /** CORS'a izin verilen origin'ler (virgülle ayrılmış; boş/`*` = tümü). */
+  readonly corsOrigins?: string
 }
 
 /**
@@ -43,6 +46,19 @@ export interface AppDeps {
  */
 export const buildApp = (deps: AppDeps): FastifyInstance => {
   const app = Fastify({ logger: true })
+
+  // CORS: farklı origin'lerden (mock-shell SDK, pipeline) gelen review/chat
+  // istekleri için. Boş ya da `*` verilirse tüm origin'lere izin verilir.
+  const trimmed = deps.corsOrigins?.trim()
+  const origin =
+    trimmed === undefined || trimmed === '' || trimmed === '*'
+      ? true
+      : trimmed.split(',').map((value) => value.trim())
+  void app.register(cors, {
+    origin,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['content-type', 'authorization', 'x-covora-token', 'x-covora-user']
+  })
 
   // Herkese açık: sağlık ve giriş.
   registerHealthRoutes(app)

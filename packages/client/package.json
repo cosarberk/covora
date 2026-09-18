@@ -14,7 +14,8 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && pnpm run build:browser",
+    "build:browser": "esbuild src/index.ts --bundle --format=iife --global-name=Covora --platform=browser --outfile=dist/covora-client.global.js --minify",
     "dev": "tsc -b --watch",
     "typecheck": "tsc -p tsconfig.test.json",
     "test": "vitest run",
@@ -26,6 +27,7 @@
     "html2canvas": "^1.4.1"
   },
   "devDependencies": {
+    "esbuild": "^0.24.0",
     "jsdom": "^25.0.1",
     "vitest": "^2.1.8"
   }

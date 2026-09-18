@@ -20,6 +20,7 @@
     "@covora/db": "workspace:*",
     "@covora/provider-ollama": "workspace:*",
     "@covora/types": "workspace:*",
+    "@fastify/cors": "^10.0.1",
     "@fastify/static": "^8.0.3",
     "fastify": "^5.1.0",
     "zod": "^4.3.6"
