@@ -1,12 +1,15 @@
 /**
  * @module @covora/provider-ollama/client
  *
- * Ollama `/api/chat` uç noktasıyla konuşan ince HTTP istemcisi.
+ * Ollama `/api/chat` uç noktasıyla konuşan ince HTTP istemcisi. `node:http`
+ * tabanlı {@link postJson} kullanır: fetch'in kapatılamayan gizli header zaman
+ * aşımı olmadığından, CPU'da model soğuk yüklenirken bağlantı kesilmez.
  */
 
 import { z } from 'zod'
 
 import type { OllamaProviderConfig } from './config.js'
+import { postJson } from './http.js'
 import type { OllamaMessage } from './prompt.js'
 
 /** Ollama sohbet yanıtının ilgilendiğimiz kısmı. */
@@ -31,38 +34,15 @@ export const callOllamaChat = async (
   messages: readonly OllamaMessage[],
   format?: unknown
 ): Promise<string> => {
-  // timeoutMs <= 0 ise zaman aşımı kurulmaz: AI (ör. CPU'da soğuk model yüklemesi)
-  // cevap verene kadar beklenir. Review asenkron olduğu için bu HTTP'yi bloklamaz.
-  const controller = new AbortController()
-  const timer =
-    config.timeoutMs > 0
-      ? setTimeout(() => {
-          controller.abort()
-        }, config.timeoutMs)
-      : undefined
-
-  try {
-    const response = await fetch(`${config.baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: config.model,
-        messages,
-        stream: false,
-        ...(format !== undefined ? { format } : {})
-      }),
-      signal: controller.signal
-    })
-
-    if (!response.ok) {
-      throw new Error(`Ollama isteği başarısız: ${response.status} ${response.statusText}`)
-    }
-
-    const parsed = ollamaChatResponseSchema.parse(await response.json())
-    return parsed.message.content
-  } finally {
-    if (timer !== undefined) {
-      clearTimeout(timer)
-    }
-  }
+  const data = await postJson(
+    `${config.baseUrl.replace(/\/$/, '')}/api/chat`,
+    {
+      model: config.model,
+      messages,
+      stream: false,
+      ...(format !== undefined ? { format } : {})
+    },
+    { timeoutMs: config.timeoutMs }
+  )
+  return ollamaChatResponseSchema.parse(data).message.content
 }

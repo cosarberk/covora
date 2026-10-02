@@ -9,3 +9,4 @@
 export * from './config.js'
 export * from './provider.js'
 export * from './chat.js'
+export * from './http.js'
