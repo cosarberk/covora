@@ -292,83 +292,80 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
                     </span>
                   </td>
                   <td>
-                    {warming[provider.id] === true ? (
-                      <span className="badge" title="Model belleğe yükleniyor">
-                        RAM'e yükleniyor…
-                      </span>
-                    ) : h === undefined ? (
+                    <div className="health">
+                      {warming[provider.id] === true ? (
+                        <span className="badge badge--warm" title="Model belleğe yükleniyor">
+                          RAM'e yükleniyor…
+                        </span>
+                      ) : h === undefined ? (
+                        <span className="health__muted">—</span>
+                      ) : h === 'loading' ? (
+                        <span className="health__muted">kontrol ediliyor…</span>
+                      ) : h.reachable ? (
+                        <>
+                          {h.modelLoaded === true ? (
+                            <span className="badge badge--pass">Hazır · RAM'de</span>
+                          ) : h.modelLoaded === false ? (
+                            <span className="badge badge--warm">Yüklü değil</span>
+                          ) : (
+                            <span className="badge badge--pass">Erişilebilir</span>
+                          )}
+                          {h.latencyMs !== undefined && (
+                            <span className="health__muted">{h.latencyMs} ms</span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="badge badge--fail" title={h.error}>
+                          Erişilemiyor
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="cell-actions">
+                      {!provider.active && (
+                        <button
+                          type="button"
+                          className="link-button"
+                          onClick={() => void activate(provider.id)}
+                        >
+                          Aktifleştir
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="link-button"
                         onClick={() => void checkHealth(provider.id)}
                       >
-                        Kontrol et
+                        Durum
                       </button>
-                    ) : h === 'loading' ? (
-                      <span className="mono">kontrol ediliyor…</span>
-                    ) : h.reachable ? (
-                      <span className="mono" title={(h.models ?? []).join(', ')}>
-                        {h.modelLoaded === true ? (
-                          <span className="badge badge--pass">Hazır (RAM'de)</span>
-                        ) : h.modelLoaded === false ? (
-                          <>
-                            <span className="badge badge--pass">erişilebilir</span>
-                            <span className="badge"> yüklü değil</span>
-                          </>
-                        ) : (
-                          <span className="badge badge--pass">erişilebilir</span>
-                        )}
-                        {h.latencyMs !== undefined && ` ${h.latencyMs}ms`}
-                      </span>
-                    ) : (
-                      <span className="badge badge--fail" title={h.error}>
-                        erişilemiyor
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    {!provider.active && (
+                      {provider.providerType === 'ollama' && (
+                        <>
+                          <button
+                            type="button"
+                            className="link-button"
+                            disabled={warming[provider.id] === true}
+                            onClick={() => void warm(provider.id)}
+                          >
+                            RAM'e yükle
+                          </button>
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => void unload(provider.id)}
+                          >
+                            Boşalt
+                          </button>
+                        </>
+                      )}
                       <button
                         type="button"
-                        className="link-button"
-                        onClick={() => void activate(provider.id)}
+                        className="link-button link-button--danger"
+                        onClick={() => void remove(provider.id)}
                       >
-                        Aktifleştir
+                        Sil
                       </button>
-                    )}{' '}
-                    <button
-                      type="button"
-                      className="link-button"
-                      onClick={() => void checkHealth(provider.id)}
-                    >
-                      Durum
-                    </button>{' '}
-                    {provider.providerType === 'ollama' && (
-                      <>
-                        <button
-                          type="button"
-                          className="link-button"
-                          disabled={warming[provider.id] === true}
-                          onClick={() => void warm(provider.id)}
-                        >
-                          RAM'e yükle
-                        </button>{' '}
-                        <button
-                          type="button"
-                          className="link-button"
-                          onClick={() => void unload(provider.id)}
-                        >
-                          Boşalt
-                        </button>{' '}
-                      </>
-                    )}
-                    <button
-                      type="button"
-                      className="link-button"
-                      onClick={() => void remove(provider.id)}
-                    >
-                      Sil
-                    </button>
+                    </div>
                   </td>
                 </tr>
               )

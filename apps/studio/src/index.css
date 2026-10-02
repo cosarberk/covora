@@ -899,3 +899,32 @@ img {
   color: var(--text-dim);
   font-size: 12px;
 }
+
+/* Sağlayıcı paneli: sağlık + aksiyon hücreleri okunur olsun */
+.health {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.health__muted {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.cell-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.badge--warm {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.link-button--danger {
+  color: var(--fail);
+}
+/* Yan yana rozetler bitişmesin */
+.badge + .badge {
+  margin-left: 6px;
+}
