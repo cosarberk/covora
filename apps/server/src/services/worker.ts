@@ -148,16 +148,28 @@ export const startWorker = (deps: WorkerDeps): Worker => {
     }
   }
 
+  // Yoklama hatalarını (ör. DB/şema henüz hazır değil) kısılmış biçimde logla;
+  // her poll'de tekrar tekrar basıp log'u boğmasın. tick asla throw etmez.
+  let lastErrorAt = 0
   const tick = async (): Promise<void> => {
-    while (running && active < concurrency) {
-      const claimed = await claimNextQueued(deps.prisma)
-      if (claimed === null) {
-        break
+    try {
+      while (running && active < concurrency) {
+        const claimed = await claimNextQueued(deps.prisma)
+        if (claimed === null) {
+          break
+        }
+        active += 1
+        void process(claimed).finally(() => {
+          active -= 1
+        })
       }
-      active += 1
-      void process(claimed).finally(() => {
-        active -= 1
-      })
+    } catch (error) {
+      const now = Date.now()
+      if (now - lastErrorAt > 30_000) {
+        lastErrorAt = now
+        // eslint-disable-next-line no-console
+        console.error(`[covora worker] kuyruk yoklanamadı: ${errorMessage(error)}`)
+      }
     }
   }
 
