@@ -8,7 +8,7 @@
  */
 
 import type { ProviderConfig, ProviderHealth, ProviderType, ReviewKind } from '@covora/types'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { CreateProviderInput, StudioApi } from '../api/client.js'
 
@@ -105,17 +105,83 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
     }
   }
 
+  const [warming, setWarming] = useState<Record<string, boolean>>({})
+  const mounted = useRef(true)
+  useEffect(
+    () => () => {
+      mounted.current = false
+    },
+    []
+  )
+
   const checkHealth = async (id: string): Promise<void> => {
     setHealth((current) => ({ ...current, [id]: 'loading' }))
     try {
       const result = await api.getProviderHealth(id)
-      setHealth((current) => ({ ...current, [id]: result }))
+      if (mounted.current) {
+        setHealth((current) => ({ ...current, [id]: result }))
+      }
     } catch {
       setHealth((current) => {
         const next = { ...current }
         delete next[id]
         return next
       })
+    }
+  }
+
+  const stopWarming = (id: string): void =>
+    setWarming((current) => {
+      const next = { ...current }
+      delete next[id]
+      return next
+    })
+
+  // Model RAM'e yüklenene (modelLoaded) kadar sağlığı yoklar.
+  const pollUntilLoaded = useCallback(
+    (id: string, triesLeft: number): void => {
+      if (!mounted.current || triesLeft <= 0) {
+        stopWarming(id)
+        return
+      }
+      void api
+        .getProviderHealth(id)
+        .then((h) => {
+          if (!mounted.current) {
+            return
+          }
+          setHealth((current) => ({ ...current, [id]: h }))
+          if (h.modelLoaded === true) {
+            stopWarming(id)
+          } else {
+            globalThis.setTimeout(() => pollUntilLoaded(id, triesLeft - 1), 5000)
+          }
+        })
+        .catch(() => {
+          globalThis.setTimeout(() => pollUntilLoaded(id, triesLeft - 1), 5000)
+        })
+    },
+    [api]
+  )
+
+  const warm = async (id: string): Promise<void> => {
+    setWarming((current) => ({ ...current, [id]: true }))
+    try {
+      await api.warmProvider(id)
+    } catch (cause) {
+      stopWarming(id)
+      setError(cause instanceof Error ? cause.message : 'Bilinmeyen hata')
+      return
+    }
+    pollUntilLoaded(id, 120) // ~10 dk (5sn × 120)
+  }
+
+  const unload = async (id: string): Promise<void> => {
+    try {
+      await api.unloadProvider(id)
+      globalThis.setTimeout(() => void checkHealth(id), 1500)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Bilinmeyen hata')
     }
   }
 
@@ -226,7 +292,11 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
                     </span>
                   </td>
                   <td>
-                    {h === undefined ? (
+                    {warming[provider.id] === true ? (
+                      <span className="badge" title="Model belleğe yükleniyor">
+                        RAM'e yükleniyor…
+                      </span>
+                    ) : h === undefined ? (
                       <button
                         type="button"
                         className="link-button"
@@ -238,9 +308,16 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
                       <span className="mono">kontrol ediliyor…</span>
                     ) : h.reachable ? (
                       <span className="mono" title={(h.models ?? []).join(', ')}>
-                        <span className="badge badge--pass">erişilebilir</span>
-                        {h.modelLoaded === true && <span className="badge badge--pass"> yüklü</span>}
-                        {h.modelLoaded === false && <span className="badge"> yüklü değil</span>}
+                        {h.modelLoaded === true ? (
+                          <span className="badge badge--pass">Hazır (RAM'de)</span>
+                        ) : h.modelLoaded === false ? (
+                          <>
+                            <span className="badge badge--pass">erişilebilir</span>
+                            <span className="badge"> yüklü değil</span>
+                          </>
+                        ) : (
+                          <span className="badge badge--pass">erişilebilir</span>
+                        )}
                         {h.latencyMs !== undefined && ` ${h.latencyMs}ms`}
                       </span>
                     ) : (
@@ -259,6 +336,32 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
                         Aktifleştir
                       </button>
                     )}{' '}
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => void checkHealth(provider.id)}
+                    >
+                      Durum
+                    </button>{' '}
+                    {provider.providerType === 'ollama' && (
+                      <>
+                        <button
+                          type="button"
+                          className="link-button"
+                          disabled={warming[provider.id] === true}
+                          onClick={() => void warm(provider.id)}
+                        >
+                          RAM'e yükle
+                        </button>{' '}
+                        <button
+                          type="button"
+                          className="link-button"
+                          onClick={() => void unload(provider.id)}
+                        >
+                          Boşalt
+                        </button>{' '}
+                      </>
+                    )}
                     <button
                       type="button"
                       className="link-button"
