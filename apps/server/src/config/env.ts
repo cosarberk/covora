@@ -35,11 +35,13 @@ const envSchema = z.object({
    */
   COVORA_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(1),
   /**
-   * LLM isteği zaman aşımı (ms). CPU'da vision modelinin soğuk yüklemesi
-   * dakikalar sürebildiği için yüksek tutulur. Review asenkron olduğundan uzun
-   * süre HTTP'yi bloklamaz. Varsayılan 300000 (5 dk).
+   * LLM isteği zaman aşımı (ms). **0 = zaman aşımı yok** (AI cevap verene kadar
+   * bekle) — varsayılan budur. Review asenkron (worker) olduğu için uzun bekleme
+   * HTTP'yi bloklamaz. CPU'da model soğuk yüklenirken bağlantıyı kesmemek, Ollama
+   * yüklemesinin iptal edilip kısır döngüye girmesini önler. Bir üst sınır
+   * istenirse ms cinsinden pozitif bir değer verilir.
    */
-  COVORA_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(300000)
+  COVORA_LLM_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(0)
 })
 
 /** Doğrulanmış ortam yapılandırması. */

@@ -133,7 +133,7 @@ export const createOpenAiProvider = (config: OpenAiProviderConfig): LlmProvider 
       }
 
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), timeoutMs)
+      const timer = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : undefined
       try {
         const response = await fetch(`${config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
           method: 'POST',
@@ -173,7 +173,9 @@ export const createOpenAiProvider = (config: OpenAiProviderConfig): LlmProvider 
           )
         })
       } finally {
-        clearTimeout(timer)
+        if (timer !== undefined) {
+          clearTimeout(timer)
+        }
       }
     }
   }
@@ -197,7 +199,7 @@ export const createOpenAiChat = (config: Omit<OpenAiProviderConfig, 'kind'>): Op
   return {
     async send(messages) {
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), timeoutMs)
+      const timer = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : undefined
       try {
         const response = await fetch(`${config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
           method: 'POST',
@@ -234,7 +236,9 @@ export const createOpenAiChat = (config: Omit<OpenAiProviderConfig, 'kind'>): Op
         const parsed = openAiResponseSchema.parse(await response.json())
         return parsed.choices[0]!.message.content
       } finally {
-        clearTimeout(timer)
+        if (timer !== undefined) {
+          clearTimeout(timer)
+        }
       }
     }
   }

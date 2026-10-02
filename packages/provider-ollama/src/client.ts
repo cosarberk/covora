@@ -31,10 +31,15 @@ export const callOllamaChat = async (
   messages: readonly OllamaMessage[],
   format?: unknown
 ): Promise<string> => {
+  // timeoutMs <= 0 ise zaman aşımı kurulmaz: AI (ör. CPU'da soğuk model yüklemesi)
+  // cevap verene kadar beklenir. Review asenkron olduğu için bu HTTP'yi bloklamaz.
   const controller = new AbortController()
-  const timer = setTimeout(() => {
-    controller.abort()
-  }, config.timeoutMs)
+  const timer =
+    config.timeoutMs > 0
+      ? setTimeout(() => {
+          controller.abort()
+        }, config.timeoutMs)
+      : undefined
 
   try {
     const response = await fetch(`${config.baseUrl}/api/chat`, {
@@ -56,6 +61,8 @@ export const callOllamaChat = async (
     const parsed = ollamaChatResponseSchema.parse(await response.json())
     return parsed.message.content
   } finally {
-    clearTimeout(timer)
+    if (timer !== undefined) {
+      clearTimeout(timer)
+    }
   }
 }

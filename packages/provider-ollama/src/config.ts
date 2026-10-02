@@ -15,8 +15,8 @@ export const ollamaProviderConfigSchema = z.object({
   model: z.string().min(1),
   /** Bu sağlayıcının işlediği review türü. */
   kind: reviewKindSchema,
-  /** İstek zaman aşımı (ms). CPU çıkarımı yavaş olabileceği için yüksek. */
-  timeoutMs: z.number().positive().default(120000)
+  /** İstek zaman aşımı (ms). 0 = zaman aşımı yok (AI cevap verene kadar bekle). */
+  timeoutMs: z.number().nonnegative().default(120000)
 })
 
 /** Ayrıştırılmış (varsayılanları uygulanmış) yapılandırma. */
