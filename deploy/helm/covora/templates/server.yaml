@@ -13,6 +13,17 @@ spec:
       labels:
         app: covora
     spec:
+      # Server başlamadan önce DB şemasını uygula (yeni tablo/kolonlar).
+      # `prisma db push` idempotenttir; şema güncelse hızlıca no-op'tur.
+      # Postgres henüz hazır değilse init başarısız olur ve k8s yeniden dener.
+      initContainers:
+        - name: db-push
+          image: {{ .Values.image.registry }}/covora:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ['pnpm', '--filter', '@covora/db', 'db:push']
+          env:
+            - name: DATABASE_URL
+              value: postgresql://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres:5432/{{ .Values.postgres.db }}
       containers:
         - name: covora
           image: {{ .Values.image.registry }}/covora:{{ .Values.image.tag }}
