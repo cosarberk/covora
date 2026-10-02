@@ -165,17 +165,37 @@ export const appendLog = async (
   runId: string,
   line: { readonly level: LogLevel; readonly message: string; readonly stepKey?: string }
 ): Promise<RunLogLine> => {
-  const seq = await prisma.runLog.count({ where: { runId } })
-  const created = await prisma.runLog.create({
-    data: {
-      runId,
-      seq,
-      level: line.level,
-      message: line.message,
-      stepKey: line.stepKey ?? null
+  // seq, mevcut en yüksek + 1 olarak üretilir. Nadir eşzamanlı yazımda unique
+  // (runId, seq) çakışırsa (P2002) birkaç kez yeniden denenir; böylece bir log
+  // satırı asla run'ı düşürmez.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const last = await prisma.runLog.findFirst({
+      where: { runId },
+      orderBy: { seq: 'desc' },
+      select: { seq: true }
+    })
+    const seq = last === null ? 0 : last.seq + 1
+    try {
+      const created = await prisma.runLog.create({
+        data: {
+          runId,
+          seq,
+          level: line.level,
+          message: line.message,
+          stepKey: line.stepKey ?? null
+        }
+      })
+      return toRunLogLine(created)
+    } catch (error) {
+      const code = (error as { code?: string }).code
+      if (code === 'P2002' && attempt < 4) {
+        continue
+      }
+      throw error
     }
-  })
-  return toRunLogLine(created)
+  }
+  // Ulaşılamaz; tip tatmini için.
+  throw new Error('Log satırı yazılamadı')
 }
 
 /** Run'ı terminal duruma getirir. */

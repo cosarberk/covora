@@ -97,23 +97,39 @@ const resolveDeterministic = async (
     )
   )
 
-  return Promise.all(
-    rules.map(async (rule): Promise<RuleResult> => {
-      const checker = checkers[rule.id]
-      if (checker !== undefined) {
-        const result = await checker(rule, input)
-        await sink.log('info', `${rule.id}: ${result.outcome}`, 'deterministic')
-        return result
+  // Checker'ları paralel çöz (hız) ama LOG'ları sırayla yaz: log satırı sırası
+  // (seq) tek tek üretildiği için eşzamanlı yazım unique çakışmasına yol açar.
+  const resolved = await Promise.all(
+    rules.map(
+      async (
+        rule
+      ): Promise<{ result: RuleResult; level: 'info' | 'warn'; message: string }> => {
+        const checker = checkers[rule.id]
+        if (checker !== undefined) {
+          const result = await checker(rule, input)
+          return { result, level: 'info', message: `${rule.id}: ${result.outcome}` }
+        }
+        const clientResult = clientResultsById.get(rule.id)
+        if (clientResult !== undefined) {
+          return {
+            result: clientResult,
+            level: 'info',
+            message: `${rule.id}: ${clientResult.outcome} (client)`
+          }
+        }
+        return {
+          result: { ruleId: rule.id, outcome: 'fail', note: 'Deterministik kontrol tanımlı değil' },
+          level: 'warn',
+          message: `${rule.id}: checker tanımlı değil → fail`
+        }
       }
-      const clientResult = clientResultsById.get(rule.id)
-      if (clientResult !== undefined) {
-        await sink.log('info', `${rule.id}: ${clientResult.outcome} (client)`, 'deterministic')
-        return clientResult
-      }
-      await sink.log('warn', `${rule.id}: checker tanımlı değil → fail`, 'deterministic')
-      return { ruleId: rule.id, outcome: 'fail', note: 'Deterministik kontrol tanımlı değil' }
-    })
+    )
   )
+
+  for (const entry of resolved) {
+    await sink.log(entry.level, entry.message, 'deterministic')
+  }
+  return resolved.map((entry) => entry.result)
 }
 
 /**
