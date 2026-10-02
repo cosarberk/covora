@@ -4,11 +4,13 @@
  * OpenAI-uyumlu (`/v1/chat/completions`) sağlayıcı adapter'ı. vLLM, llama.cpp
  * server, TGI, LM Studio ve OpenAI API'nin kendisi dahil geniş bir ekosistemi
  * kapsar. `LlmProvider` arayüzünü uygular; vision girdisi `image_url` içeriğiyle
- * taşınır. Ollama adapter'ıyla aynı sözleşmeye uyar; motor hangisini
- * kullandığını bilmez.
+ * taşınır. İstekler `node:http` tabanlı {@link postJson} ile yapılır (fetch'in
+ * kapatılamayan header zaman aşımı olmadığından, yavaş/soğuk modelde bağlantı
+ * kesilmez; `timeoutMs` 0 ise süresiz beklenir).
  */
 
 import type { LlmProvider } from '@covora/core'
+import { postJson } from '@covora/provider-ollama'
 import {
   checklistOutcomeSchema,
   type ChatMessage,
@@ -29,7 +31,7 @@ export interface OpenAiProviderConfig {
   readonly kind: ReviewKind
   /** Gizli API anahtarı (varsa `Authorization: Bearer`). */
   readonly apiKey?: string | null
-  /** İstek zaman aşımı (ms). CPU çıkarımı yavaş olabileceği için yüksek. */
+  /** İstek zaman aşımı (ms). 0 = süresiz bekle. */
   readonly timeoutMs?: number
 }
 
@@ -47,6 +49,10 @@ const checklistResponseSchema = z.object({
 type ContentPart =
   | { readonly type: 'text'; readonly text: string }
   | { readonly type: 'image_url'; readonly image_url: { readonly url: string } }
+
+const openAiResponseSchema = z.object({
+  choices: z.array(z.object({ message: z.object({ content: z.string() }) })).min(1)
+})
 
 const systemPrompt = (kind: ReviewKind): string => {
   const subject = kind === 'ui' ? 'kullanıcı arayüzü ekran görüntüsünü' : 'kaynak kodu'
@@ -112,10 +118,6 @@ const parseResults = (content: string): Map<string, RuleResult> => {
   return map
 }
 
-const openAiResponseSchema = z.object({
-  choices: z.array(z.object({ message: z.object({ content: z.string() }) })).min(1)
-})
-
 /**
  * OpenAI-uyumlu bir {@link LlmProvider} oluşturur.
  *
@@ -123,60 +125,37 @@ const openAiResponseSchema = z.object({
  * @returns Yapılandırılmış sağlayıcı.
  */
 export const createOpenAiProvider = (config: OpenAiProviderConfig): LlmProvider => {
-  const timeoutMs = config.timeoutMs ?? 120_000
-
+  const endpoint = `${config.baseUrl.replace(/\/$/, '')}/chat/completions`
   return {
     kind: config.kind,
     async fillChecklist(input, items) {
       if (items.length === 0) {
         return []
       }
-
-      const controller = new AbortController()
-      const timer = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : undefined
-      try {
-        const response = await fetch(`${config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            ...(config.apiKey !== undefined && config.apiKey !== null && config.apiKey.length > 0
-              ? { authorization: `Bearer ${config.apiKey}` }
-              : {})
-          },
-          body: JSON.stringify({
-            model: config.model,
-            temperature: 0,
-            response_format: { type: 'json_object' },
-            messages: [
-              { role: 'system', content: systemPrompt(input.kind) },
-              { role: 'user', content: buildUserContent(input, items) }
-            ]
-          }),
-          signal: controller.signal
-        })
-
-        if (!response.ok) {
-          throw new Error(`OpenAI-uyumlu istek başarısız: ${response.status} ${response.statusText}`)
-        }
-
-        const parsed = openAiResponseSchema.parse(await response.json())
-        const resultsByRuleId = parseResults(parsed.choices[0]!.message.content)
-
-        return items.map((item): RuleResult => {
-          const result = resultsByRuleId.get(item.ruleId)
-          return (
-            result ?? {
-              ruleId: item.ruleId,
-              outcome: 'fail',
-              note: 'Model bu madde için sonuç döndürmedi'
-            }
-          )
-        })
-      } finally {
-        if (timer !== undefined) {
-          clearTimeout(timer)
-        }
-      }
+      const data = await postJson(
+        endpoint,
+        {
+          model: config.model,
+          temperature: 0,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: systemPrompt(input.kind) },
+            { role: 'user', content: buildUserContent(input, items) }
+          ]
+        },
+        { apiKey: config.apiKey ?? null, timeoutMs: config.timeoutMs ?? 0 }
+      )
+      const resultsByRuleId = parseResults(openAiResponseSchema.parse(data).choices[0]!.message.content)
+      return items.map((item): RuleResult => {
+        const result = resultsByRuleId.get(item.ruleId)
+        return (
+          result ?? {
+            ruleId: item.ruleId,
+            outcome: 'fail',
+            note: 'Model bu madde için sonuç döndürmedi'
+          }
+        )
+      })
     }
   }
 }
@@ -194,52 +173,33 @@ export interface OpenAiChat {
  * @returns {@link OpenAiChat}.
  */
 export const createOpenAiChat = (config: Omit<OpenAiProviderConfig, 'kind'>): OpenAiChat => {
-  const timeoutMs = config.timeoutMs ?? 120_000
-
+  const endpoint = `${config.baseUrl.replace(/\/$/, '')}/chat/completions`
   return {
     async send(messages) {
-      const controller = new AbortController()
-      const timer = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : undefined
-      try {
-        const response = await fetch(`${config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            ...(config.apiKey !== undefined && config.apiKey !== null && config.apiKey.length > 0
-              ? { authorization: `Bearer ${config.apiKey}` }
-              : {})
-          },
-          body: JSON.stringify({
-            model: config.model,
-            messages: messages.map((message) =>
-              message.images !== undefined && message.images.length > 0
-                ? {
-                    role: message.role,
-                    content: [
-                      { type: 'text', text: message.content },
-                      ...message.images.map(
-                        (image): ContentPart => ({
-                          type: 'image_url',
-                          image_url: { url: toDataUrl(image) }
-                        })
-                      )
-                    ]
-                  }
-                : { role: message.role, content: message.content }
-            )
-          }),
-          signal: controller.signal
-        })
-        if (!response.ok) {
-          throw new Error(`OpenAI-uyumlu sohbet başarısız: ${response.status} ${response.statusText}`)
-        }
-        const parsed = openAiResponseSchema.parse(await response.json())
-        return parsed.choices[0]!.message.content
-      } finally {
-        if (timer !== undefined) {
-          clearTimeout(timer)
-        }
-      }
+      const data = await postJson(
+        endpoint,
+        {
+          model: config.model,
+          messages: messages.map((message) =>
+            message.images !== undefined && message.images.length > 0
+              ? {
+                  role: message.role,
+                  content: [
+                    { type: 'text', text: message.content },
+                    ...message.images.map(
+                      (image): ContentPart => ({
+                        type: 'image_url',
+                        image_url: { url: toDataUrl(image) }
+                      })
+                    )
+                  ]
+                }
+              : { role: message.role, content: message.content }
+          )
+        },
+        { apiKey: config.apiKey ?? null, timeoutMs: config.timeoutMs ?? 0 }
+      )
+      return openAiResponseSchema.parse(data).choices[0]!.message.content
     }
   }
 }

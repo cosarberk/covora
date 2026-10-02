@@ -1,14 +1,19 @@
 /**
  * @module @covora/provider-ollama/provider.test
  *
- * `createOllamaProvider` için birim testleri. Ağ katmanı `fetch` mock'lanarak
+ * `createOllamaProvider` için birim testleri. Ağ katmanı (`postJson`) mock'lanarak
  * izole edilir.
  */
 
 import type { ChecklistItem, ReviewInput } from '@covora/types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('./http.js', () => ({ postJson: vi.fn() }))
+
+import { postJson } from './http.js'
 import { createOllamaProvider } from './provider.js'
+
+const mockedPostJson = vi.mocked(postJson)
 
 const config = { baseUrl: 'http://localhost:11434', model: 'qwen3-vl:8b', kind: 'ui' as const }
 
@@ -19,31 +24,18 @@ const items: ChecklistItem[] = [
 
 const input: ReviewInput = { kind: 'ui', screenshot: 'base64data' }
 
-/**
- * `fetch`'i tek bir Ollama yanıtı dönecek şekilde mock'lar.
- *
- * @param content - Model yanıtının içerik metni.
- * @param ok - HTTP yanıtının başarılı olup olmadığı.
- */
-const stubFetch = (content: string, ok = true): void => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => ({
-      ok,
-      status: ok ? 200 : 500,
-      statusText: ok ? 'OK' : 'Internal Server Error',
-      json: async () => ({ message: { content } })
-    }))
-  )
+/** `postJson`'ı tek bir Ollama yanıtı (message.content) dönecek şekilde ayarlar. */
+const stubOllama = (content: string): void => {
+  mockedPostJson.mockResolvedValue({ message: { content } })
 }
 
 describe('createOllamaProvider', () => {
   afterEach(() => {
-    vi.unstubAllGlobals()
+    vi.clearAllMocks()
   })
 
   it('modelin doldurduğu sonuçları RuleResult listesine çevirir', async () => {
-    stubFetch(
+    stubOllama(
       JSON.stringify({
         results: [
           { ruleId: 'a', outcome: 'pass' },
@@ -61,7 +53,7 @@ describe('createOllamaProvider', () => {
   })
 
   it('modelin döndürmediği maddeyi fail sayar', async () => {
-    stubFetch(JSON.stringify({ results: [{ ruleId: 'a', outcome: 'pass' }] }))
+    stubOllama(JSON.stringify({ results: [{ ruleId: 'a', outcome: 'pass' }] }))
     const provider = createOllamaProvider(config)
 
     const results = await provider.fillChecklist(input, items)
@@ -70,7 +62,7 @@ describe('createOllamaProvider', () => {
   })
 
   it('geçersiz JSON gelirse tüm maddeleri fail sayar', async () => {
-    stubFetch('bu bir json değil')
+    stubOllama('bu bir json değil')
     const provider = createOllamaProvider(config)
 
     const results = await provider.fillChecklist(input, items)
@@ -79,20 +71,18 @@ describe('createOllamaProvider', () => {
   })
 
   it('HTTP hatasında hata fırlatır', async () => {
-    stubFetch('', false)
+    mockedPostJson.mockRejectedValue(new Error('HTTP 500'))
     const provider = createOllamaProvider(config)
 
     await expect(provider.fillChecklist(input, items)).rejects.toThrow()
   })
 
   it('boş checklist için ağ çağrısı yapmaz', async () => {
-    const fetchSpy = vi.fn()
-    vi.stubGlobal('fetch', fetchSpy)
     const provider = createOllamaProvider(config)
 
     const results = await provider.fillChecklist(input, [])
 
     expect(results).toEqual([])
-    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(mockedPostJson).not.toHaveBeenCalled()
   })
 })

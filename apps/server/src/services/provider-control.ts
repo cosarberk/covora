@@ -11,6 +11,7 @@
 
 import { toProviderType } from '@covora/db'
 import type { PrismaClient } from '@covora/db'
+import { postJson } from '@covora/provider-ollama'
 
 /** Kontrol aksiyonunun sonucu. */
 export interface ProviderControlResult {
@@ -23,12 +24,14 @@ export interface ProviderControlResult {
 /** Ollama'ya ateşle-unut bir keep_alive isteği gönderir (yükle/boşalt). */
 const sendKeepAlive = (baseUrl: string, model: string, keepAlive: number): void => {
   const base = baseUrl.replace(/\/$/, '')
-  // Yanıtı beklemiyoruz: model yüklemesi uzun sürebilir; durum health'ten gelir.
-  void fetch(`${base}/api/generate`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ model, prompt: '', stream: false, keep_alive: keepAlive })
-  }).catch(() => {
+  // Yanıtı beklemiyoruz: model yüklemesi dakikalar sürebilir. timeoutMs=0 ile
+  // (node:http, header zaman aşımı yok) bağlantı kesilmez → Ollama yüklemeyi
+  // iptal etmez. Durum "AI Sağlayıcılar" sağlık kontrolünden izlenir.
+  void postJson(
+    `${base}/api/generate`,
+    { model, prompt: '', stream: false, keep_alive: keepAlive },
+    { timeoutMs: 0 }
+  ).catch(() => {
     // Hata health kontrolünde görünür; burada yutulur.
   })
 }
