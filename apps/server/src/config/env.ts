@@ -33,7 +33,13 @@ const envSchema = z.object({
    * Review worker'ının aynı anda işleyeceği en fazla run sayısı. CPU çıkarımını
    * korumak için varsayılan 1'dir (seri). Güçlü/çok-GPU sağlayıcılarda artırılabilir.
    */
-  COVORA_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(1)
+  COVORA_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(1),
+  /**
+   * LLM isteği zaman aşımı (ms). CPU'da vision modelinin soğuk yüklemesi
+   * dakikalar sürebildiği için yüksek tutulur. Review asenkron olduğundan uzun
+   * süre HTTP'yi bloklamaz. Varsayılan 300000 (5 dk).
+   */
+  COVORA_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(300000)
 })
 
 /** Doğrulanmış ortam yapılandırması. */

@@ -21,19 +21,26 @@ import { createOpenAiProvider } from './providers/openai.js'
 export interface ProviderResolverDeps {
   /** Verilen tür için DB'deki aktif sağlayıcının çalışma-zamanı görünümü. */
   readonly getActiveProviderRuntime: (kind: ReviewKind) => Promise<ActiveProviderRuntime | null>
+  /** LLM isteği zaman aşımı (ms). CPU'da soğuk yükleme için yüksek tutulur. */
+  readonly timeoutMs: number
 }
 
 /** Bir çalışma-zamanı sağlayıcı görünümünden somut bir {@link LlmProvider} kurar. */
-const buildProvider = (kind: ReviewKind, runtime: ActiveProviderRuntime): LlmProvider => {
+const buildProvider = (
+  kind: ReviewKind,
+  runtime: ActiveProviderRuntime,
+  timeoutMs: number
+): LlmProvider => {
   if (runtime.providerType === 'openai-compatible') {
     return createOpenAiProvider({
       baseUrl: runtime.baseUrl,
       model: runtime.model,
       kind,
-      apiKey: runtime.apiKey
+      apiKey: runtime.apiKey,
+      timeoutMs
     })
   }
-  return createOllamaProvider({ baseUrl: runtime.baseUrl, model: runtime.model, kind })
+  return createOllamaProvider({ baseUrl: runtime.baseUrl, model: runtime.model, kind, timeoutMs })
 }
 
 /**
@@ -61,5 +68,7 @@ export const createProviderResolver =
   (deps: ProviderResolverDeps) =>
   async (kind: ReviewKind): Promise<LlmProvider> => {
     const runtime = await deps.getActiveProviderRuntime(kind)
-    return runtime === null ? unconfiguredProvider(kind) : buildProvider(kind, runtime)
+    return runtime === null
+      ? unconfiguredProvider(kind)
+      : buildProvider(kind, runtime, deps.timeoutMs)
   }
