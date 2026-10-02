@@ -14,32 +14,30 @@ const config = {
   ingestToken: 'ingest-token-1'
 }
 
-const okResponse = { reviewId: 'r1', coverage: { score: 80 }, gate: { passed: true } }
-
 describe('createCovoraClient', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  it('review isteğini doğru gövdeyle sunucuya gönderir', async () => {
+  it('enqueue review isteğini doğru gövde ve token ile gönderir', async () => {
     const fetchMock = vi.fn(async (_url: string, _options: RequestInit) => ({
       ok: true,
-      status: 200,
-      statusText: 'OK',
-      json: async () => okResponse
+      status: 202,
+      statusText: 'Accepted',
+      json: async () => ({ runId: 'run-1', status: 'queued', queuePosition: 1 })
     }))
     vi.stubGlobal('fetch', fetchMock)
     const client = createCovoraClient(config)
 
-    const result = await client.review({
+    const result = await client.enqueue({
       input: { kind: 'ui', screenshot: 'img' },
       codeHash: 'hash-1'
     })
 
-    expect(result.reviewId).toBe('r1')
-    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(result).toEqual({ runId: 'run-1', status: 'queued', queuePosition: 1 })
     const [url, options] = fetchMock.mock.calls[0]!
     expect(url).toBe('http://localhost:4000/reviews')
+    expect((options.headers as Record<string, string>)['x-covora-token']).toBe('ingest-token-1')
     const body = JSON.parse(options.body as string) as Record<string, unknown>
     expect(body).toMatchObject({
       projectKey: 'my-plugin',
@@ -56,7 +54,7 @@ describe('createCovoraClient', () => {
     const client = createCovoraClient(config)
 
     await expect(
-      client.review({ input: { kind: 'ui', screenshot: 'img' }, codeHash: 'h' })
+      client.enqueue({ input: { kind: 'ui', screenshot: 'img' }, codeHash: 'h' })
     ).rejects.toThrow()
   })
 })
