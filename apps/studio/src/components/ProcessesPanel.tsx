@@ -68,6 +68,13 @@ const RunDetail = ({
   const [logs, setLogs] = useState<RunLogLine[]>([])
   const consoleRef = useRef<HTMLDivElement | null>(null)
 
+  // onChanged'i ref'te tut: aksi halde her render'da kimliği değişip aboneliği
+  // yeniden kurar ve sonsuz render/yeniden-bağlanma döngüsüne yol açar.
+  const onChangedRef = useRef(onChanged)
+  useEffect(() => {
+    onChangedRef.current = onChanged
+  }, [onChanged])
+
   useEffect(() => {
     let active = true
     setRun(null)
@@ -83,13 +90,13 @@ const RunDetail = ({
           break
         case 'run.finished':
           setRun(event.run)
-          onChanged()
+          onChangedRef.current()
           break
         case 'run.updated':
           setRun((current) =>
             current === null ? current : { ...current, status: event.status }
           )
-          onChanged()
+          onChangedRef.current()
           break
         case 'step.updated':
           setRun((current) => {
@@ -116,7 +123,7 @@ const RunDetail = ({
       active = false
       unsubscribe()
     }
-  }, [api, runId, onChanged])
+  }, [api, runId])
 
   // Yeni log geldikçe konsolu en alta kaydır.
   useEffect(() => {
