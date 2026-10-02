@@ -4,10 +4,17 @@
  * Bir projenin review geçmişini ve coverage skorlarını listeler.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import type { RuleResult } from '@covora/types'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 
 import type { ReviewRecord, StudioApi } from '../api/client.js'
 import { DeltaBadge } from './DeltaBadge.js'
+
+const OUTCOME_CLASS: Record<RuleResult['outcome'], string> = {
+  pass: 'badge badge--pass',
+  partial: 'badge',
+  fail: 'badge badge--fail'
+}
 
 /** {@link ReviewsPanel} props. */
 export interface ReviewsPanelProps {
@@ -69,6 +76,8 @@ export const ReviewsPanel = ({ api, projectKey }: ReviewsPanelProps): React.JSX.
   const [reviews, setReviews] = useState<readonly ReviewRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [results, setResults] = useState<Record<string, readonly RuleResult[]>>({})
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -85,6 +94,22 @@ export const ReviewsPanel = ({ api, projectKey }: ReviewsPanelProps): React.JSX.
   useEffect(() => {
     void load()
   }, [load])
+
+  const toggleDetail = async (reviewId: string): Promise<void> => {
+    if (openId === reviewId) {
+      setOpenId(null)
+      return
+    }
+    setOpenId(reviewId)
+    if (results[reviewId] === undefined) {
+      try {
+        const fetched = await api.listReviewResults(reviewId)
+        setResults((current) => ({ ...current, [reviewId]: fetched }))
+      } catch {
+        setResults((current) => ({ ...current, [reviewId]: [] }))
+      }
+    }
+  }
 
   if (loading) {
     return <div className="state">Yükleniyor…</div>
@@ -109,27 +134,62 @@ export const ReviewsPanel = ({ api, projectKey }: ReviewsPanelProps): React.JSX.
           <th>Seviye</th>
           <th>Gate</th>
           <th>Kod Hash</th>
+          <th>Detay</th>
         </tr>
       </thead>
       <tbody>
         {reviews.map((review) => (
-          <tr key={review.id}>
-            <td>{formatDate(review.createdAt)}</td>
-            <td>
-              <span className="badge">{review.kind}</span>
-            </td>
-            <td className="score">{review.score.toFixed(1)}</td>
-            <td>
-              <DeltaBadge delta={review.delta} />
-            </td>
-            <td>{review.level}</td>
-            <td>
-              <span className={review.gatePassed ? 'badge badge--pass' : 'badge badge--fail'}>
-                {review.gatePassed ? 'Geçti' : 'Kaldı'}
-              </span>
-            </td>
-            <td className="mono">{review.codeHash.slice(0, 10)}</td>
-          </tr>
+          <Fragment key={review.id}>
+            <tr>
+              <td>{formatDate(review.createdAt)}</td>
+              <td>
+                <span className="badge">{review.kind}</span>
+              </td>
+              <td className="score">{review.score.toFixed(1)}</td>
+              <td>
+                <DeltaBadge delta={review.delta} />
+              </td>
+              <td>{review.level}</td>
+              <td>
+                <span className={review.gatePassed ? 'badge badge--pass' : 'badge badge--fail'}>
+                  {review.gatePassed ? 'Geçti' : 'Kaldı'}
+                </span>
+              </td>
+              <td className="mono">{review.codeHash.slice(0, 10)}</td>
+              <td>
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => void toggleDetail(review.id)}
+                >
+                  {openId === review.id ? 'Gizle' : 'Kurallar'}
+                </button>
+              </td>
+            </tr>
+            {openId === review.id && (
+              <tr>
+                <td colSpan={8} className="audit-cell">
+                  {results[review.id] === undefined ? (
+                    <span className="mono">Yükleniyor…</span>
+                  ) : results[review.id]!.length === 0 ? (
+                    <span className="mono">Kural sonucu yok.</span>
+                  ) : (
+                    <ul className="result-list">
+                      {results[review.id]!.map((result) => (
+                        <li key={result.ruleId} className="result-item">
+                          <span className={OUTCOME_CLASS[result.outcome]}>{result.outcome}</span>
+                          <span className="mono">{result.ruleId}</span>
+                          {result.note !== undefined && (
+                            <span className="result-note">{result.note}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </td>
+              </tr>
+            )}
+          </Fragment>
         ))}
       </tbody>
       </table>

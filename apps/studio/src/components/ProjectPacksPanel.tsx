@@ -105,14 +105,19 @@ export const ProjectPacksPanel = ({
                     </span>
                   </td>
                   <td>
-                    <button
-                      type="button"
-                      className={on ? 'toggle toggle--on' : 'toggle'}
-                      disabled={busy === pack.id}
-                      onClick={() => void toggle(pack)}
-                    >
-                      {on ? 'Abone' : 'Abone Değil'}
-                    </button>
+                    <label className="switch" title={on ? 'Aboneliği kaldır' : 'Abone ol'}>
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        checked={on}
+                        disabled={busy === pack.id}
+                        onChange={() => void toggle(pack)}
+                      />
+                      <span className="switch__slider" />
+                    </label>
+                    <span className={on ? 'switch__label is-on' : 'switch__label'}>
+                      {busy === pack.id ? 'Güncelleniyor…' : on ? 'Abone' : 'Abone değil'}
+                    </span>
                   </td>
                 </tr>
               )

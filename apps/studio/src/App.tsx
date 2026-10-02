@@ -13,6 +13,7 @@ import { createStudioApi, type ProjectSummary } from './api/client.js'
 import { DashboardPanel } from './components/DashboardPanel.js'
 import { Login } from './components/Login.js'
 import { PacksPanel } from './components/PacksPanel.js'
+import { ProcessesPanel } from './components/ProcessesPanel.js'
 import { ProjectPacksPanel } from './components/ProjectPacksPanel.js'
 import { ProvidersPanel } from './components/ProvidersPanel.js'
 import { ReviewsPanel } from './components/ReviewsPanel.js'
@@ -25,7 +26,7 @@ const serverUrl = import.meta.env.VITE_COVORA_SERVER_URL ?? ''
 const api = createStudioApi({ baseUrl: serverUrl })
 
 type Tab = 'packs' | 'rules' | 'reviews' | 'webhooks' | 'settings'
-type View = 'dashboard' | 'project' | 'providers' | 'packs'
+type View = 'dashboard' | 'project' | 'providers' | 'packs' | 'processes'
 
 const PROJECT_TABS: readonly { readonly id: Tab; readonly label: string }[] = [
   { id: 'packs', label: 'Paketler' },
@@ -184,6 +185,7 @@ export const App = (): React.JSX.Element => {
           <div className="nav__section">
             <div className="nav__label">Genel</div>
             {navItem('dashboard', '📊', 'Genel Bakış')}
+            {navItem('processes', '🔧', 'Süreçler')}
             {navItem('packs', '📦', 'Review Paketleri')}
             {navItem('providers', '⚙️', 'AI Sağlayıcılar')}
           </div>
@@ -260,6 +262,21 @@ export const App = (): React.JSX.Element => {
                   </div>
                 </div>
                 <PacksPanel api={api} />
+              </>
+            ) : view === 'processes' ? (
+              <>
+                <div className="page__head">
+                  <div>
+                    <h1 className="page__title">Süreçler</h1>
+                    <p className="page__sub">
+                      Review pipeline'ları: durum, adımlar ve canlı loglar.
+                    </p>
+                  </div>
+                </div>
+                <ProcessesPanel
+                  api={api}
+                  projects={projects.map((project) => ({ key: project.key, name: project.name }))}
+                />
               </>
             ) : view === 'providers' ? (
               <>
