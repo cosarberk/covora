@@ -62,31 +62,32 @@ export DATABASE_URL="postgresql://covora:covora@localhost:5432/covora"
 pnpm db:migrate        # geliştirme; prod'da: pnpm db:deploy
 ```
 
-### 3. Ollama (self-host, GPU'suz olabilir)
-
-Uzak/yerel bir Ollama sunucusunda modelleri hazırla:
-
-```bash
-ollama pull qwen3-vl:8b       # UI (vision) review
-ollama pull qwen3-coder:7b    # code review
-```
-
-### 4. Server
+### 3. Server
 
 `apps/server/.env` (bkz. `.env.example`):
 
 ```
 PORT=4000
 DATABASE_URL=postgresql://covora:covora@localhost:5432/covora
-OLLAMA_UI_BASE_URL=http://<ollama-host>:11434
-OLLAMA_UI_MODEL=qwen3-vl:8b
-OLLAMA_CODE_BASE_URL=http://<ollama-host>:11434
-OLLAMA_CODE_MODEL=qwen3-coder:7b
+COVORA_AUTH_SECRET=en-az-16-karakterlik-gizli
 ```
+
+> AI sağlayıcıları (Ollama / OpenAI-uyumlu) **ENV'den verilmez**; sunucu açıldıktan
+> sonra Studio → **AI Sağlayıcılar** sayfasından eklenir ve DB'ye kaydedilir.
+> Aktif sağlayıcı yoksa review'ın AI adımı `degraded` olur (deterministik kurallar
+> yine çalışır); sunucu sağlayıcısız da sorunsuz açılır.
 
 ```bash
 pnpm --filter @covora/server dev    # ya da build + start
 ```
+
+### 4. AI sağlayıcısı ekle (Studio'dan)
+
+Studio → **AI Sağlayıcılar** → tür (`ollama` / `openai-uyumlu`), endpoint, model
+(ve gerekiyorsa API anahtarı), review türü (ui/code) seç, **aktifleştir**. Örn.
+Ollama için `http://<host>:11434` + `qwen3-vl:8b`. Sağlık/durumu aynı sayfadan
+canlı kontrol edilir. Sağlayıcının modeli sıcak tutması (ör. `OLLAMA_KEEP_ALIVE`)
+tamamen o backend'in operasyonel meselesidir; Covora'ya gömülü değildir.
 
 ### 5. Studio
 
@@ -129,9 +130,10 @@ Audit aktörü `x-covora-user` başlığından okunur.
 ## Deployment
 
 Docker image'lar `docker-compose.yml` üzerinden (postgres + server + studio).
-Ollama ayrı bir (tercihen GPU'lu) sunucuda yaşar; server ona `OLLAMA_*`
-değişkenleriyle bağlanır. k8s dağıtımı için image'lar worker node'lara,
-Ollama uzak sunucuya yerleştirilir.
+AI sağlayıcısı (Ollama ya da OpenAI-uyumlu bir uç nokta) ayrı yaşar ve Covora'ya
+**Studio → AI Sağlayıcılar** sayfasından, DB'ye kaydedilerek tanıtılır — server
+ortam değişkeniyle değil. Böylece sağlayıcı türü/adresi çalışırken değiştirilebilir
+ve hiçbir backend koda/deployment'a gömülü olmaz.
 
 ## ⚠️ Yayınlama (npm publish)
 

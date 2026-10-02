@@ -34,6 +34,36 @@ enum ChecklistOutcome {
   fail
 }
 
+enum RunStatus {
+  queued
+  running
+  succeeded
+  degraded
+  failed
+  cancelled
+}
+
+enum StepStatus {
+  pending
+  running
+  succeeded
+  skipped
+  failed
+  cancelled
+}
+
+enum LogLevel {
+  debug
+  info
+  warn
+  error
+}
+
+enum ProviderType {
+  ollama
+  openai_compatible
+}
+
 /// Review edilen bir birim (plugin / repo).
 model Project {
   id          String         @id @default(cuid())
@@ -45,6 +75,7 @@ model Project {
   updatedAt   DateTime       @updatedAt
   packs       ProjectPack[]
   reviews     Review[]
+  runs        ReviewRun[]
   config      ProjectConfig?
   webhooks    Webhook[]
 }
@@ -147,8 +178,72 @@ model Review {
   delta      Float?
   createdAt  DateTime       @default(now())
   results    ReviewResult[]
+  run        ReviewRun?
 
   @@index([projectId, createdAt])
+}
+
+/// Bir review'ın yürütme (pipeline) kaydı. Kuyruğa alınır, adımlardan geçer,
+/// loglanır; başarıyla bittiğinde bir Review üretip ona bağlanır.
+model ReviewRun {
+  id         String     @id @default(cuid())
+  projectId  String
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind       ReviewKind
+  codeHash   String
+  status     RunStatus  @default(queued)
+  /// Review girdisi (ekran görüntüsü/dosyalar) — worker işleyene dek saklanır, sonra temizlenebilir.
+  input      Json
+  /// Başarıyla üretilen sonuç kaydı (tamamlanınca bağlanır).
+  reviewId   String?    @unique
+  review     Review?    @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+  /// Önceki aynı tür review'a göre skor farkı (ilk review'da null).
+  delta      Float?
+  /// Run `failed` olduğunda kök hata özeti.
+  error      String?
+  /// Tekrar denenme sayısı.
+  attempts   Int        @default(0)
+  createdAt  DateTime   @default(now())
+  startedAt  DateTime?
+  finishedAt DateTime?
+  steps      RunStep[]
+  logs       RunLog[]
+
+  @@index([projectId, createdAt])
+  @@index([status, createdAt])
+}
+
+/// Bir run içindeki tek bir adım (job/stage).
+model RunStep {
+  id         String     @id @default(cuid())
+  runId      String
+  run        ReviewRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  key        String
+  name       String
+  order      Int
+  status     StepStatus @default(pending)
+  startedAt  DateTime?
+  finishedAt DateTime?
+  error      String?
+
+  @@unique([runId, key])
+  @@index([runId, order])
+}
+
+/// Bir run'a (ve opsiyonel bir adıma) ait tek bir log satırı. Canlı akar,
+/// kalıcı saklanır.
+model RunLog {
+  id      String    @id @default(cuid())
+  runId   String
+  run     ReviewRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  seq     Int
+  at      DateTime  @default(now())
+  level   LogLevel  @default(info)
+  stepKey String?
+  message String
+
+  @@unique([runId, seq])
+  @@index([runId, seq])
 }
 
 /// Bir review içindeki tek bir kural sonucu.
@@ -165,14 +260,20 @@ model ReviewResult {
 
 /// Studio'dan yönetilen LLM sağlayıcısı. Her review türü için bir tanesi aktif.
 model ProviderConfig {
-  id        String     @id @default(cuid())
-  name      String
-  kind      ReviewKind
-  baseUrl   String
-  model     String
-  active    Boolean    @default(false)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id            String       @id @default(cuid())
+  name          String
+  providerType  ProviderType @default(ollama)
+  kind          ReviewKind
+  baseUrl       String
+  model         String
+  /// Yetenekler: görsel (UI) ve/veya metin (code) girdisi işleyebilir mi.
+  visionCapable Boolean      @default(false)
+  textCapable   Boolean      @default(false)
+  /// OpenAI-uyumlu uç noktalar için gizli API anahtarı (asla UI'ya dönülmez).
+  apiKey        String?
+  active        Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   @@index([kind, active])
 }

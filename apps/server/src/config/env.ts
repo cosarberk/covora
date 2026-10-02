@@ -13,14 +13,11 @@ const envSchema = z.object({
   PORT: z.coerce.number().positive().default(4000),
   /** Postgres bağlantı adresi. */
   DATABASE_URL: z.string().min(1),
-  /** UI (vision) review için Ollama adresi. */
-  OLLAMA_UI_BASE_URL: z.url(),
-  /** UI review modeli (örn. qwen3-vl:8b). */
-  OLLAMA_UI_MODEL: z.string().min(1),
-  /** Code review için Ollama adresi. */
-  OLLAMA_CODE_BASE_URL: z.url(),
-  /** Code review modeli. */
-  OLLAMA_CODE_MODEL: z.string().min(1),
+  /**
+   * AI sağlayıcıları (Ollama / OpenAI-uyumlu) artık ortamdan değil, Studio →
+   * "AI Sağlayıcılar" sayfasından DB'ye kaydedilir ve oradan yönetilir. Bu
+   * yüzden sunucunun açılması için hiçbir sağlayıcı değişkeni gerekmez.
+   */
   /** JWT imzalama anahtarı (en az 16 karakter). */
   COVORA_AUTH_SECRET: z.string().min(16),
   /** İlk kurulumda oluşturulacak admin e-postası (opsiyonel). */
@@ -31,7 +28,12 @@ const envSchema = z.object({
    * CORS'a izin verilen origin'ler (virgülle ayrılmış). Mock-shell/pipeline gibi
    * farklı origin'lerden gelen review/chat istekleri için. Boş ya da `*` = tümü.
    */
-  COVORA_CORS_ORIGINS: z.string().optional()
+  COVORA_CORS_ORIGINS: z.string().optional(),
+  /**
+   * Review worker'ının aynı anda işleyeceği en fazla run sayısı. CPU çıkarımını
+   * korumak için varsayılan 1'dir (seri). Güçlü/çok-GPU sağlayıcılarda artırılabilir.
+   */
+  COVORA_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(1)
 })
 
 /** Doğrulanmış ortam yapılandırması. */

@@ -13,10 +13,18 @@ import type {
   GatePolicy,
   ManagementRule,
   Pack,
+  ProviderCapabilities,
   ProviderConfig,
+  ProviderHealth,
+  ProviderType,
   ReviewKind,
+  ReviewRun,
   Rule,
   RuleEvaluationType,
+  RuleResult,
+  RunEvent,
+  RunLogLine,
+  RunSummary,
   Severity,
   User,
   Webhook,
@@ -95,9 +103,12 @@ export interface CreateWebhookInput {
 /** Yeni sağlayıcı girdisi. */
 export interface CreateProviderInput {
   readonly name: string
+  readonly providerType?: ProviderType
   readonly kind: ReviewKind
   readonly baseUrl: string
   readonly model: string
+  readonly capabilities?: ProviderCapabilities
+  readonly apiKey?: string | null
   readonly active?: boolean
 }
 
@@ -128,10 +139,23 @@ export interface StudioApi {
   createProvider(input: CreateProviderInput): Promise<ProviderConfig>
   activateProvider(id: string): Promise<void>
   deleteProvider(id: string): Promise<void>
+  getProviderHealth(id: string): Promise<ProviderHealth>
+  /** Run (Süreçler) listesini getirir (opsiyonel proje filtresi). */
+  listRuns(projectKey?: string): Promise<readonly RunSummary[]>
+  /** Bir run'ın tam görünümünü getirir. */
+  getRun(id: string): Promise<ReviewRun>
+  /** Bir run'ın loglarını getirir. */
+  getRunLogs(id: string, afterSeq?: number): Promise<readonly RunLogLine[]>
+  /** Kuyruktaki bir run'ı iptal eder. */
+  cancelRun(id: string): Promise<void>
+  /** Bir run'ın olaylarına canlı abone olur; aboneliği sonlandıran fonksiyonu döner. */
+  streamRun(id: string, onEvent: (event: RunEvent) => void): () => void
   listRules(projectKey: string): Promise<readonly ManagementRule[]>
   updateRule(ruleId: string, patch: UpdateRuleInput): Promise<void>
   listAudits(ruleId: string): Promise<readonly AuditRecord[]>
   listReviews(projectKey: string): Promise<readonly ReviewRecord[]>
+  /** Bir review'ın kural bazında sonuçlarını getirir. */
+  listReviewResults(reviewId: string): Promise<readonly RuleResult[]>
   upsertProject(key: string, name: string): Promise<ProjectSummary>
   listPacks(): Promise<readonly Pack[]>
   createPack(input: CreatePackInput): Promise<Pack>
@@ -282,6 +306,78 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
       ok(await authFetch(`/providers/${encodeURIComponent(id)}`, { method: 'DELETE' }))
     },
 
+    async getProviderHealth(id) {
+      return json<ProviderHealth>(
+        await authFetch(`/providers/${encodeURIComponent(id)}/health`)
+      )
+    },
+
+    async listRuns(projectKey) {
+      const suffix =
+        projectKey !== undefined ? `?projectKey=${encodeURIComponent(projectKey)}` : ''
+      const data = await json<{ runs: RunSummary[] }>(await authFetch(`/runs${suffix}`))
+      return data.runs
+    },
+
+    async getRun(id) {
+      return json<ReviewRun>(await authFetch(`/runs/${encodeURIComponent(id)}`))
+    },
+
+    async getRunLogs(id, afterSeq) {
+      const suffix = afterSeq !== undefined ? `?afterSeq=${afterSeq}` : ''
+      const data = await json<{ logs: RunLogLine[] }>(
+        await authFetch(`/runs/${encodeURIComponent(id)}/logs${suffix}`)
+      )
+      return data.logs
+    },
+
+    async cancelRun(id) {
+      ok(await authFetch(`/runs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }))
+    },
+
+    streamRun(id, onEvent) {
+      const controller = new AbortController()
+      void (async () => {
+        const headers = new Headers()
+        if (token !== null) {
+          headers.set('authorization', `Bearer ${token}`)
+        }
+        const response = await fetch(url(`/runs/${encodeURIComponent(id)}/events`), {
+          headers,
+          signal: controller.signal
+        })
+        if (!response.ok || response.body === null) {
+          return
+        }
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        for (;;) {
+          const { value, done } = await reader.read()
+          if (done) {
+            break
+          }
+          buffer += decoder.decode(value, { stream: true })
+          const chunks = buffer.split('\n\n')
+          buffer = chunks.pop() ?? ''
+          for (const chunk of chunks) {
+            const dataLine = chunk.split('\n').find((line) => line.startsWith('data:'))
+            if (dataLine === undefined) {
+              continue
+            }
+            try {
+              onEvent(JSON.parse(dataLine.slice(5).trim()) as RunEvent)
+            } catch {
+              // Bozuk satır atlanır.
+            }
+          }
+        }
+      })().catch(() => {
+        // Abort ya da ağ hatası: sessizce biter (UI yeniden bağlanabilir).
+      })
+      return () => controller.abort()
+    },
+
     async listRules(projectKey) {
       const data = await json<{ rules: ManagementRule[] }>(
         await authFetch(`${projectPath(projectKey)}/rules`)
@@ -305,6 +401,13 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
         await authFetch(`${projectPath(projectKey)}/reviews`)
       )
       return data.reviews
+    },
+
+    async listReviewResults(reviewId) {
+      const data = await json<{ results: RuleResult[] }>(
+        await authFetch(`/reviews/${encodeURIComponent(reviewId)}/results`)
+      )
+      return data.results
     },
 
     async upsertProject(key, name) {

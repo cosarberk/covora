@@ -1,93 +1,60 @@
 /**
  * @module @covora/server/services/review.test
  *
- * `createReview` için birim testleri. Tüm bağımlılıklar mock'lanır.
+ * `enqueueReview` için birim testleri. Tüm bağımlılıklar mock'lanır.
  */
 
-import { defaultCoverageConfig, defaultGatePolicy, type LlmProvider } from '@covora/core'
-import type { ChecklistItem, ReviewInput } from '@covora/types'
+import type { ReviewInput, ReviewRun } from '@covora/types'
 import { describe, expect, it, vi } from 'vitest'
 
-import { createReview, ProjectNotFoundError, type CreateReviewDeps } from './review.service.js'
+import { createRunEventBus } from './events.js'
+import { enqueueReview, ProjectNotFoundError, type EnqueueReviewDeps } from './review.service.js'
 
 const uiInput: ReviewInput = { kind: 'ui', screenshot: 'base64' }
 
-const passingProvider: LlmProvider = {
+const sampleRun: ReviewRun = {
+  id: 'run-1',
+  projectKey: 'my-plugin',
   kind: 'ui',
-  fillChecklist: async (_input, items: readonly ChecklistItem[]) =>
-    items.map((item) => ({ ruleId: item.ruleId, outcome: 'pass' as const }))
+  codeHash: 'abc123',
+  status: 'queued',
+  steps: [],
+  createdAt: new Date().toISOString(),
+  delta: null
 }
 
-const buildDeps = (): CreateReviewDeps => ({
+const buildDeps = (overrides: Partial<EnqueueReviewDeps> = {}): EnqueueReviewDeps => ({
   findProjectByKey: vi.fn(async () => ({ id: 'p1' })),
-  listEnabledRules: vi.fn(async () => [
-    {
-      id: 'r1',
-      title: 'Kural 1',
-      description: '',
-      kind: 'ui' as const,
-      evaluation: 'llm' as const,
-      severity: 'warning' as const,
-      weight: 1
-    }
-  ]),
-  getEffectiveConfig: vi.fn(async () => ({
-    coverageConfig: defaultCoverageConfig,
-    gatePolicy: defaultGatePolicy
-  })),
-  createProvider: vi.fn(async () => passingProvider),
-  getLatestScore: vi.fn(async () => null),
-  saveReview: vi.fn(async () => 'review-1')
+  createRun: vi.fn(async () => ({ id: 'run-1' })),
+  getQueuePosition: vi.fn(async () => 2),
+  getRun: vi.fn(async () => sampleRun),
+  bus: createRunEventBus(),
+  ...overrides
 })
 
-describe('createReview', () => {
-  it('uçtan uca review çalıştırır, coverage üretir ve kaydeder', async () => {
-    const deps = buildDeps()
+describe('enqueueReview', () => {
+  it('run yaratır, kuyruk sırasını döner ve run.created yayınlar', async () => {
+    const bus = createRunEventBus()
+    const events: string[] = []
+    bus.subscribe('run-1', (event) => events.push(event.type))
+    const deps = buildDeps({ bus })
 
-    const result = await createReview(deps, {
+    const result = await enqueueReview(deps, {
       projectKey: 'my-plugin',
       input: uiInput,
       codeHash: 'abc123'
     })
 
-    expect(result.reviewId).toBe('review-1')
-    expect(result.coverage.score).toBe(100)
-    expect(result.gate.passed).toBe(true)
-    expect(deps.saveReview).toHaveBeenCalledOnce()
-  })
-
-  it('regresyon eşiği aşılınca ve politika açıkken gate bloklanır', async () => {
-    const failingProvider: LlmProvider = {
-      kind: 'ui',
-      fillChecklist: async (_input, items: readonly ChecklistItem[]) =>
-        items.map((item) => ({ ruleId: item.ruleId, outcome: 'fail' as const }))
-    }
-    const deps: CreateReviewDeps = {
-      ...buildDeps(),
-      createProvider: vi.fn(async () => failingProvider),
-      getLatestScore: vi.fn(async () => 100),
-      getEffectiveConfig: vi.fn(async () => ({
-        coverageConfig: defaultCoverageConfig,
-        gatePolicy: { ...defaultGatePolicy, blockOnRegression: true, regressionThreshold: 5 }
-      }))
-    }
-
-    const result = await createReview(deps, {
-      projectKey: 'my-plugin',
-      input: uiInput,
-      codeHash: 'abc123'
-    })
-
-    expect(result.delta).toBe(-100)
-    expect(result.gate.passed).toBe(false)
-    expect(result.gate.reasons.some((reason) => reason.includes('regresyon'))).toBe(true)
+    expect(result).toEqual({ runId: 'run-1', status: 'queued', queuePosition: 2 })
+    expect(deps.createRun).toHaveBeenCalledOnce()
+    expect(events).toContain('run.created')
   })
 
   it('proje bulunamazsa ProjectNotFoundError fırlatır', async () => {
-    const deps: CreateReviewDeps = { ...buildDeps(), findProjectByKey: vi.fn(async () => null) }
+    const deps = buildDeps({ findProjectByKey: vi.fn(async () => null) })
 
     await expect(
-      createReview(deps, { projectKey: 'yok', input: uiInput, codeHash: 'x' })
+      enqueueReview(deps, { projectKey: 'yok', input: uiInput, codeHash: 'x' })
     ).rejects.toBeInstanceOf(ProjectNotFoundError)
   })
 })

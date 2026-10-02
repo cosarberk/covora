@@ -52,7 +52,10 @@ export interface IngestGuardDeps {
 export const makeIngestGuard = (deps: IngestGuardDeps): preHandlerHookHandler => {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const body = request.body as { projectKey?: unknown } | undefined
-    const projectKey = typeof body?.projectKey === 'string' ? body.projectKey : null
+    const query = request.query as { projectKey?: unknown } | undefined
+    const fromBody = typeof body?.projectKey === 'string' ? body.projectKey : null
+    const fromQuery = typeof query?.projectKey === 'string' ? query.projectKey : null
+    const projectKey = fromBody ?? fromQuery
     if (projectKey === null) {
       return reply.status(400).send({ error: 'projectKey gerekli' })
     }

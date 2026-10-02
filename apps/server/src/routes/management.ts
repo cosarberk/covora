@@ -66,9 +66,12 @@ const webhookPatchBodySchema = z.object({
 
 const createProviderBodySchema = z.object({
   name: z.string().min(1),
+  providerType: z.enum(['ollama', 'openai-compatible']).optional(),
   kind: reviewKindSchema,
   baseUrl: z.string().min(1),
   model: z.string().min(1),
+  capabilities: z.object({ vision: z.boolean(), text: z.boolean() }).optional(),
+  apiKey: z.string().nullable().optional(),
   active: z.boolean().optional()
 })
 
@@ -245,6 +248,11 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
     return reply.send({ reviews: await deps.listRecentReviews(project.id) })
   })
 
+  app.get('/reviews/:id/results', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return reply.send({ results: await deps.listReviewResults(id) })
+  })
+
   app.get('/dashboard', async () => deps.getDashboard())
 
   app.get('/projects/:key/config', async (request, reply) => {
@@ -319,11 +327,19 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
     }
+    // Yetenek verilmediyse review türünden makul varsayılan türet
+    // (ui → vision, code → text).
+    const capabilities =
+      parsed.data.capabilities ??
+      (parsed.data.kind === 'ui' ? { vision: true, text: false } : { vision: false, text: true })
     const provider = await deps.createProvider({
       name: parsed.data.name,
       kind: parsed.data.kind,
       baseUrl: parsed.data.baseUrl,
       model: parsed.data.model,
+      capabilities,
+      ...(parsed.data.providerType !== undefined ? { providerType: parsed.data.providerType } : {}),
+      ...(parsed.data.apiKey !== undefined ? { apiKey: parsed.data.apiKey } : {}),
       ...(parsed.data.active !== undefined ? { active: parsed.data.active } : {})
     })
     return reply.status(201).send(provider)
@@ -333,6 +349,15 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
     const { id } = request.params as { id: string }
     await deps.setActiveProvider(id)
     return reply.status(204).send()
+  })
+
+  app.get('/providers/:id/health', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const health = await deps.getProviderHealth(id)
+    if (health === null) {
+      return reply.status(404).send({ error: 'Sağlayıcı bulunamadı' })
+    }
+    return reply.send(health)
   })
 
   app.delete('/providers/:id', async (request, reply) => {

@@ -9,6 +9,9 @@ build/
 # Turbo
 .turbo/
 
+# Tarayıcı SDK bundle'ı (derleme çıktısı; manuel test için kopyalanır)
+test/covora-client.global.js
+
 # Ortam değişkenleri
 .env
 .env.local

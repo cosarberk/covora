@@ -1,11 +1,13 @@
 /**
  * @module studio/components/ProvidersPanel
  *
- * LLM sağlayıcılarını (Ollama endpoint + model) yönetir: listele, ekle,
- * aktifleştir, sil. Her review türü (ui/code) için bir sağlayıcı aktiftir.
+ * AI sağlayıcılarını yönetir: türü (ollama / openai-uyumlu), endpoint, model ve
+ * (gerekirse) API anahtarıyla ekle; aktifleştir; sil; ve **anlık sağlığını**
+ * kontrol et (erişilebilir mi, model yüklü mü, mevcut modeller). Her review türü
+ * (ui/code) için bir sağlayıcı aktiftir.
  */
 
-import type { ProviderConfig, ReviewKind } from '@covora/types'
+import type { ProviderConfig, ProviderHealth, ProviderType, ReviewKind } from '@covora/types'
 import { useCallback, useEffect, useState } from 'react'
 
 import type { CreateProviderInput, StudioApi } from '../api/client.js'
@@ -17,9 +19,11 @@ export interface ProvidersPanelProps {
 
 const emptyForm: CreateProviderInput = {
   name: '',
+  providerType: 'ollama',
   kind: 'ui',
   baseUrl: 'http://ollama:11434',
   model: '',
+  apiKey: '',
   active: true
 }
 
@@ -34,6 +38,7 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState<CreateProviderInput>(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [health, setHealth] = useState<Record<string, ProviderHealth | 'loading'>>({})
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -53,13 +58,22 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
 
   const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
-    if (form.name.trim().length === 0 || form.model.trim().length === 0 || form.baseUrl.trim().length === 0) {
+    if (
+      form.name.trim().length === 0 ||
+      form.model.trim().length === 0 ||
+      form.baseUrl.trim().length === 0
+    ) {
       return
     }
     setSaving(true)
     setError(null)
     try {
-      await api.createProvider(form)
+      // API anahtarı yalnızca openai-uyumlu için anlamlı.
+      const payload: CreateProviderInput =
+        form.providerType === 'openai-compatible'
+          ? form
+          : { ...form, apiKey: null }
+      await api.createProvider(payload)
       setForm(emptyForm)
       await load()
     } catch (cause) {
@@ -91,6 +105,22 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
     }
   }
 
+  const checkHealth = async (id: string): Promise<void> => {
+    setHealth((current) => ({ ...current, [id]: 'loading' }))
+    try {
+      const result = await api.getProviderHealth(id)
+      setHealth((current) => ({ ...current, [id]: result }))
+    } catch {
+      setHealth((current) => {
+        const next = { ...current }
+        delete next[id]
+        return next
+      })
+    }
+  }
+
+  const isOpenAi = form.providerType === 'openai-compatible'
+
   return (
     <section>
       <form className="rule-form" onSubmit={(event) => void submit(event)}>
@@ -102,6 +132,16 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
         />
         <select
           className="select"
+          value={form.providerType ?? 'ollama'}
+          onChange={(event) =>
+            setForm({ ...form, providerType: event.target.value as ProviderType })
+          }
+        >
+          <option value="ollama">ollama</option>
+          <option value="openai-compatible">openai-uyumlu</option>
+        </select>
+        <select
+          className="select"
           value={form.kind}
           onChange={(event) => setForm({ ...form, kind: event.target.value as ReviewKind })}
         >
@@ -110,16 +150,25 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
         </select>
         <input
           className="input input--grow"
-          placeholder="baseUrl (http://ollama:11434)"
+          placeholder={isOpenAi ? 'baseUrl (http://vllm:8000/v1)' : 'baseUrl (http://ollama:11434)'}
           value={form.baseUrl}
           onChange={(event) => setForm({ ...form, baseUrl: event.target.value })}
         />
         <input
           className="input"
-          placeholder="model (qwen3-vl:8b)"
+          placeholder={isOpenAi ? 'model (örn. qwen2-vl)' : 'model (qwen3-vl:8b)'}
           value={form.model}
           onChange={(event) => setForm({ ...form, model: event.target.value })}
         />
+        {isOpenAi && (
+          <input
+            className="input"
+            type="password"
+            placeholder="API anahtarı (opsiyonel)"
+            value={form.apiKey ?? ''}
+            onChange={(event) => setForm({ ...form, apiKey: event.target.value })}
+          />
+        )}
         <label className="checkbox">
           <input
             type="checkbox"
@@ -145,46 +194,82 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
             <tr>
               <th>Ad</th>
               <th>Tür</th>
+              <th>Review</th>
               <th>URL</th>
               <th>Model</th>
               <th>Durum</th>
+              <th>Sağlık</th>
               <th>İşlemler</th>
             </tr>
           </thead>
           <tbody>
-            {providers.map((provider) => (
-              <tr key={provider.id}>
-                <td>{provider.name}</td>
-                <td>
-                  <span className="badge">{provider.kind}</span>
-                </td>
-                <td className="mono">{provider.baseUrl}</td>
-                <td className="mono">{provider.model}</td>
-                <td>
-                  <span className={provider.active ? 'badge badge--pass' : 'badge'}>
-                    {provider.active ? 'Aktif' : 'Pasif'}
-                  </span>
-                </td>
-                <td>
-                  {!provider.active && (
+            {providers.map((provider) => {
+              const h = health[provider.id]
+              return (
+                <tr key={provider.id}>
+                  <td>{provider.name}</td>
+                  <td>
+                    <span className="badge">{provider.providerType}</span>
+                  </td>
+                  <td>
+                    <span className="badge">{provider.kind}</span>
+                    {provider.capabilities.vision && <span className="badge">vision</span>}
+                  </td>
+                  <td className="mono">{provider.baseUrl}</td>
+                  <td className="mono">
+                    {provider.model}
+                    {provider.hasApiKey && <span className="badge"> 🔑</span>}
+                  </td>
+                  <td>
+                    <span className={provider.active ? 'badge badge--pass' : 'badge'}>
+                      {provider.active ? 'Aktif' : 'Pasif'}
+                    </span>
+                  </td>
+                  <td>
+                    {h === undefined ? (
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => void checkHealth(provider.id)}
+                      >
+                        Kontrol et
+                      </button>
+                    ) : h === 'loading' ? (
+                      <span className="mono">kontrol ediliyor…</span>
+                    ) : h.reachable ? (
+                      <span className="mono" title={(h.models ?? []).join(', ')}>
+                        <span className="badge badge--pass">erişilebilir</span>
+                        {h.modelLoaded === true && <span className="badge badge--pass"> yüklü</span>}
+                        {h.modelLoaded === false && <span className="badge"> yüklü değil</span>}
+                        {h.latencyMs !== undefined && ` ${h.latencyMs}ms`}
+                      </span>
+                    ) : (
+                      <span className="badge badge--fail" title={h.error}>
+                        erişilemiyor
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    {!provider.active && (
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => void activate(provider.id)}
+                      >
+                        Aktifleştir
+                      </button>
+                    )}{' '}
                     <button
                       type="button"
                       className="link-button"
-                      onClick={() => void activate(provider.id)}
+                      onClick={() => void remove(provider.id)}
                     >
-                      Aktifleştir
+                      Sil
                     </button>
-                  )}{' '}
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => void remove(provider.id)}
-                  >
-                    Sil
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       )}
