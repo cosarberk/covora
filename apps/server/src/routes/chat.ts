@@ -31,7 +31,13 @@ export const registerChatRoutes = (app: FastifyInstance, deps: ChatDeps): void =
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
     }
-    const answer = await deps.sendChat(parsed.data.messages)
-    return reply.send({ reply: answer })
+    try {
+      const answer = await deps.sendChat(parsed.data.messages)
+      return reply.send({ reply: answer })
+    } catch (error) {
+      // Aktif sağlayıcı yok ya da sağlayıcıya ulaşılamadı: 503 + net mesaj.
+      const message = error instanceof Error ? error.message : 'Sohbet sağlayıcısı kullanılamıyor'
+      return reply.status(503).send({ error: message })
+    }
   })
 }

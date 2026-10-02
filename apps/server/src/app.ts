@@ -18,14 +18,16 @@ import { registerAuthRoutes, type AuthDeps } from './routes/auth.js'
 import { registerChatRoutes, type ChatDeps } from './routes/chat.js'
 import { registerHealthRoutes } from './routes/health.js'
 import { registerManagementRoutes } from './routes/management.js'
-import { registerReviewRoutes } from './routes/reviews.js'
+import { registerReviewRoutes, type ReviewRoutesDeps } from './routes/reviews.js'
+import { registerRunRoutes, type RunRoutesDeps } from './routes/runs.js'
 import type { ManagementDeps } from './services/management.js'
-import type { CreateReviewDeps } from './services/review.service.js'
 
 /** Uygulama bağımlılıkları. */
 export interface AppDeps {
-  /** Review servisi bağımlılıkları. */
-  readonly reviewDeps: CreateReviewDeps
+  /** Review ingest (kuyruğa-alma + takip) bağımlılıkları. */
+  readonly reviewDeps: ReviewRoutesDeps
+  /** Run (Süreçler) yönetim bağımlılıkları. */
+  readonly runDeps: RunRoutesDeps
   /** Yönetim (studio) bağımlılıkları. */
   readonly managementDeps: ManagementDeps
   /** İnteraktif sohbet bağımlılıkları. */
@@ -77,6 +79,7 @@ export const buildApp = (deps: AppDeps): FastifyInstance => {
     scope.addHook('preHandler', makeUserGuard(deps.authDeps.secret))
     scope.get('/auth/me', async (request) => ({ user: request.user ?? null }))
     registerManagementRoutes(scope, deps.managementDeps)
+    registerRunRoutes(scope, deps.runDeps)
   })
 
   // Studio (React) statik dosyalarını aynı sunucudan serve et (tek image).

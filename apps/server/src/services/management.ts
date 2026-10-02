@@ -19,8 +19,10 @@ import type {
   ManagementRule,
   Pack,
   ProviderConfig,
+  ProviderHealth,
   ReviewKind,
   Rule,
+  RuleResult,
   Severity,
   Webhook
 } from '@covora/types'
@@ -97,8 +99,12 @@ export interface ManagementDeps {
   readonly setActiveProvider: (id: string) => Promise<void>
   /** Bir sağlayıcıyı siler. */
   readonly deleteProvider: (id: string) => Promise<void>
+  /** Bir sağlayıcının anlık sağlığını kontrol eder. */
+  readonly getProviderHealth: (id: string) => Promise<ProviderHealth | null>
   /** Projenin son review'larını getirir. */
   readonly listRecentReviews: (projectId: string, limit?: number) => Promise<readonly ReviewRecord[]>
+  /** Bir review'ın kural bazında sonuçlarını getirir. */
+  readonly listReviewResults: (reviewId: string) => Promise<readonly RuleResult[]>
   /** Tüm projeler genelinde genel bakış özetini getirir. */
   readonly getDashboard: () => Promise<DashboardSummary>
   /** Projenin bildirim webhook'larını listeler. */
