@@ -14,7 +14,12 @@ import {
   type ManagementRule,
   type Pack,
   type ProviderConfig,
+  type ProviderType,
+  type ReviewRun,
   type Rule,
+  type RunLogLine,
+  type RunStep,
+  type RunSummary,
   type User,
   type Webhook
 } from '@covora/types'
@@ -22,8 +27,13 @@ import type {
   Pack as PrismaPack,
   ProjectConfig as PrismaProjectConfig,
   ProviderConfig as PrismaProviderConfig,
+  ProviderType as PrismaProviderType,
+  Review as PrismaReview,
+  ReviewRun as PrismaReviewRun,
   RuleAudit as PrismaRuleAudit,
   Rule as PrismaRule,
+  RunLog as PrismaRunLog,
+  RunStep as PrismaRunStep,
   User as PrismaUser,
   Webhook as PrismaWebhook
 } from '@prisma/client'
@@ -119,13 +129,91 @@ export const toGatePolicy = (config: PrismaProjectConfig): GatePolicy => ({
  * @param provider - Prisma sağlayıcı kaydı.
  * @returns {@link ProviderConfig}.
  */
+/** Prisma sağlayıcı türü enum'ını domain değerine çevirir. */
+export const toProviderType = (type: PrismaProviderType): ProviderType =>
+  type === 'openai_compatible' ? 'openai-compatible' : 'ollama'
+
+/** Domain sağlayıcı türünü Prisma enum'ına çevirir. */
+export const fromProviderType = (type: ProviderType): PrismaProviderType =>
+  type === 'openai-compatible' ? 'openai_compatible' : 'ollama'
+
 export const toProviderConfig = (provider: PrismaProviderConfig): ProviderConfig => ({
   id: provider.id,
   name: provider.name,
+  providerType: toProviderType(provider.providerType),
   kind: provider.kind,
   baseUrl: provider.baseUrl,
   model: provider.model,
+  capabilities: { vision: provider.visionCapable, text: provider.textCapable },
+  hasApiKey: provider.apiKey !== null && provider.apiKey.length > 0,
   active: provider.active
+})
+
+/** Prisma run adımını domain modeline dönüştürür. */
+export const toRunStep = (step: PrismaRunStep): RunStep => ({
+  key: step.key,
+  name: step.name,
+  order: step.order,
+  status: step.status,
+  ...(step.startedAt !== null ? { startedAt: step.startedAt.toISOString() } : {}),
+  ...(step.finishedAt !== null ? { finishedAt: step.finishedAt.toISOString() } : {}),
+  ...(step.error !== null ? { error: step.error } : {})
+})
+
+/** Prisma log satırını domain modeline dönüştürür. */
+export const toRunLogLine = (log: PrismaRunLog): RunLogLine => ({
+  seq: log.seq,
+  at: log.at.toISOString(),
+  level: log.level,
+  ...(log.stepKey !== null ? { stepKey: log.stepKey } : {}),
+  message: log.message
+})
+
+/** Prisma run kaydını (adımları ve varsa bağlı review özetiyle) domain {@link ReviewRun}'a dönüştürür. */
+export const toReviewRun = (
+  run: PrismaReviewRun,
+  projectKey: string,
+  steps: readonly PrismaRunStep[],
+  review: Pick<PrismaReview, 'score' | 'level' | 'gatePassed'> | null,
+  queuePosition?: number
+): ReviewRun => ({
+  id: run.id,
+  projectKey,
+  kind: run.kind,
+  codeHash: run.codeHash,
+  status: run.status,
+  ...(queuePosition !== undefined ? { queuePosition } : {}),
+  steps: [...steps].sort((a, b) => a.order - b.order).map(toRunStep),
+  createdAt: run.createdAt.toISOString(),
+  ...(run.startedAt !== null ? { startedAt: run.startedAt.toISOString() } : {}),
+  ...(run.finishedAt !== null ? { finishedAt: run.finishedAt.toISOString() } : {}),
+  score: review?.score ?? null,
+  level: review?.level ?? null,
+  gatePassed: review?.gatePassed ?? null,
+  delta: run.delta,
+  ...(run.error !== null ? { error: run.error } : {})
+})
+
+/** Prisma run kaydını (bağlı review özetiyle) liste satırına dönüştürür. */
+export const toRunSummary = (
+  run: PrismaReviewRun,
+  projectKey: string,
+  review: Pick<PrismaReview, 'score' | 'level' | 'gatePassed'> | null,
+  queuePosition?: number
+): RunSummary => ({
+  id: run.id,
+  projectKey,
+  kind: run.kind,
+  codeHash: run.codeHash,
+  status: run.status,
+  ...(queuePosition !== undefined ? { queuePosition } : {}),
+  score: review?.score ?? null,
+  level: review?.level ?? null,
+  gatePassed: review?.gatePassed ?? null,
+  delta: run.delta,
+  createdAt: run.createdAt.toISOString(),
+  ...(run.startedAt !== null ? { startedAt: run.startedAt.toISOString() } : {}),
+  ...(run.finishedAt !== null ? { finishedAt: run.finishedAt.toISOString() } : {})
 })
 
 /**

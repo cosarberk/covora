@@ -5,18 +5,39 @@
  * olur; aktifleştirme aynı türdeki diğerlerini pasifleştirir.
  */
 
-import type { ProviderConfig, ReviewKind } from '@covora/types'
+import type {
+  ProviderCapabilities,
+  ProviderConfig,
+  ProviderType,
+  ReviewKind
+} from '@covora/types'
 import type { PrismaClient } from '@prisma/client'
 
-import { toProviderConfig } from '../mappers.js'
+import { fromProviderType, toProviderConfig, toProviderType } from '../mappers.js'
 
 /** Yeni sağlayıcı için gerekli alanlar. */
 export interface ProviderInput {
   readonly name: string
+  readonly providerType?: ProviderType
   readonly kind: ReviewKind
   readonly baseUrl: string
   readonly model: string
+  readonly capabilities: ProviderCapabilities
+  /** OpenAI-uyumlu uç noktalar için gizli API anahtarı. */
+  readonly apiKey?: string | null
   readonly active?: boolean
+}
+
+/**
+ * Bir sağlayıcının çalışma-zamanı (gizli dahil) görünümü. Yalnızca sunucunun
+ * sağlayıcı fabrikası kullanır; API/UI'ya asla dönülmez.
+ */
+export interface ActiveProviderRuntime {
+  readonly providerType: ProviderType
+  readonly baseUrl: string
+  readonly model: string
+  readonly capabilities: ProviderCapabilities
+  readonly apiKey: string | null
 }
 
 /**
@@ -46,6 +67,31 @@ export const getActiveProvider = async (
 }
 
 /**
+ * Verilen tür için aktif sağlayıcının çalışma-zamanı görünümünü (gizli API
+ * anahtarı dahil) getirir. Yalnızca sunucu sağlayıcı fabrikası için.
+ *
+ * @param prisma - Prisma client.
+ * @param kind - Review türü.
+ * @returns Çalışma-zamanı görünümü ya da null.
+ */
+export const getActiveProviderRuntime = async (
+  prisma: PrismaClient,
+  kind: ReviewKind
+): Promise<ActiveProviderRuntime | null> => {
+  const provider = await prisma.providerConfig.findFirst({ where: { kind, active: true } })
+  if (provider === null) {
+    return null
+  }
+  return {
+    providerType: toProviderType(provider.providerType),
+    baseUrl: provider.baseUrl,
+    model: provider.model,
+    capabilities: { vision: provider.visionCapable, text: provider.textCapable },
+    apiKey: provider.apiKey
+  }
+}
+
+/**
  * Yeni sağlayıcı oluşturur. `active` ise aynı türdeki diğerleri pasifleştirilir.
  *
  * @param prisma - Prisma client.
@@ -63,9 +109,13 @@ export const createProvider = async (
     return tx.providerConfig.create({
       data: {
         name: input.name,
+        providerType: fromProviderType(input.providerType ?? 'ollama'),
         kind: input.kind,
         baseUrl: input.baseUrl,
         model: input.model,
+        visionCapable: input.capabilities.vision,
+        textCapable: input.capabilities.text,
+        apiKey: input.apiKey ?? null,
         active: input.active ?? false
       }
     })

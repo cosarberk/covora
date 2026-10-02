@@ -4,7 +4,7 @@
  * Review kaydı veri erişimi.
  */
 
-import type { ReviewKind, ReviewOutcome } from '@covora/types'
+import type { ReviewKind, ReviewOutcome, RuleResult } from '@covora/types'
 import type { PrismaClient } from '@prisma/client'
 
 /** Bir review sonucunu kalıcılaştırmak için gerekli alanlar. */
@@ -71,6 +71,28 @@ export const saveReview = async (prisma: PrismaClient, input: SaveReviewInput): 
   })
 
   return review.id
+}
+
+/**
+ * Bir review'ın kural bazında sonuçlarını (pass/partial/fail + not) getirir.
+ *
+ * @param prisma - Prisma client.
+ * @param reviewId - Review kimliği.
+ * @returns Kural sonuçları (kural anahtarına göre sıralı).
+ */
+export const getReviewResults = async (
+  prisma: PrismaClient,
+  reviewId: string
+): Promise<RuleResult[]> => {
+  const results = await prisma.reviewResult.findMany({
+    where: { reviewId },
+    orderBy: { ruleKey: 'asc' }
+  })
+  return results.map((result) =>
+    result.note !== null
+      ? { ruleId: result.ruleKey, outcome: result.outcome, note: result.note }
+      : { ruleId: result.ruleKey, outcome: result.outcome }
+  )
 }
 
 /**
