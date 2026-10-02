@@ -70,6 +70,7 @@ import type { ManagementDeps } from './services/management.js'
 import { dispatchReviewNotifications } from './services/notifications.js'
 import { createProviderResolver } from './services/provider-factory.js'
 import { checkProviderHealth } from './services/provider-health.js'
+import { unloadProvider, warmProvider } from './services/provider-control.js'
 import { startWorker } from './services/worker.js'
 
 /**
@@ -189,7 +190,9 @@ const start = async (): Promise<void> => {
     createProvider: (input) => createProviderRecord(prisma, input),
     setActiveProvider: (id) => setActiveProvider(prisma, id),
     deleteProvider: (id) => deleteProvider(prisma, id),
-    getProviderHealth: (id) => checkProviderHealth(prisma, id)
+    getProviderHealth: (id) => checkProviderHealth(prisma, id),
+    warmProvider: (id) => warmProvider(prisma, id),
+    unloadProvider: (id) => unloadProvider(prisma, id)
   }
 
   const chatDeps: ChatDeps = {

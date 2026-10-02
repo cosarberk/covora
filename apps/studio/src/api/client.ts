@@ -140,6 +140,10 @@ export interface StudioApi {
   activateProvider(id: string): Promise<void>
   deleteProvider(id: string): Promise<void>
   getProviderHealth(id: string): Promise<ProviderHealth>
+  /** Sağlayıcının modelini belleğe önceden yükler (ısıtma). */
+  warmProvider(id: string): Promise<void>
+  /** Sağlayıcının modelini bellekten boşaltır. */
+  unloadProvider(id: string): Promise<void>
   /** Run (Süreçler) listesini getirir (opsiyonel proje filtresi). */
   listRuns(projectKey?: string): Promise<readonly RunSummary[]>
   /** Bir run'ın tam görünümünü getirir. */
@@ -310,6 +314,14 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
       return json<ProviderHealth>(
         await authFetch(`/providers/${encodeURIComponent(id)}/health`)
       )
+    },
+
+    async warmProvider(id) {
+      ok(await authFetch(`/providers/${encodeURIComponent(id)}/warm`, { method: 'POST' }))
+    },
+
+    async unloadProvider(id) {
+      ok(await authFetch(`/providers/${encodeURIComponent(id)}/unload`, { method: 'POST' }))
     },
 
     async listRuns(projectKey) {

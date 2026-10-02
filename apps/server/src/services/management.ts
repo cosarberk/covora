@@ -101,6 +101,14 @@ export interface ManagementDeps {
   readonly deleteProvider: (id: string) => Promise<void>
   /** Bir sağlayıcının anlık sağlığını kontrol eder. */
   readonly getProviderHealth: (id: string) => Promise<ProviderHealth | null>
+  /** Sağlayıcının modelini belleğe önceden yükler (ısıtma). */
+  readonly warmProvider: (
+    id: string
+  ) => Promise<{ readonly supported: boolean; readonly started: boolean } | null>
+  /** Sağlayıcının modelini bellekten boşaltır. */
+  readonly unloadProvider: (
+    id: string
+  ) => Promise<{ readonly supported: boolean; readonly started: boolean } | null>
   /** Projenin son review'larını getirir. */
   readonly listRecentReviews: (projectId: string, limit?: number) => Promise<readonly ReviewRecord[]>
   /** Bir review'ın kural bazında sonuçlarını getirir. */

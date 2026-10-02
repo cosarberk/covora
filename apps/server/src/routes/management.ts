@@ -360,6 +360,30 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
     return reply.send(health)
   })
 
+  app.post('/providers/:id/warm', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const result = await deps.warmProvider(id)
+    if (result === null) {
+      return reply.status(404).send({ error: 'Sağlayıcı bulunamadı' })
+    }
+    if (!result.supported) {
+      return reply.status(400).send({ error: 'Bu sağlayıcı türü model ısıtmayı desteklemiyor' })
+    }
+    return reply.status(202).send({ status: 'warming' })
+  })
+
+  app.post('/providers/:id/unload', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const result = await deps.unloadProvider(id)
+    if (result === null) {
+      return reply.status(404).send({ error: 'Sağlayıcı bulunamadı' })
+    }
+    if (!result.supported) {
+      return reply.status(400).send({ error: 'Bu sağlayıcı türü model boşaltmayı desteklemiyor' })
+    }
+    return reply.status(202).send({ status: 'unloading' })
+  })
+
   app.delete('/providers/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     await deps.deleteProvider(id)
