@@ -96,7 +96,8 @@ const start = async (): Promise<void> => {
   // Sağlayıcı çözücü: tek kaynak DB'deki aktif sağlayıcı (türüne göre adapter);
   // yoksa AI adımı net hatayla degraded'a düşer.
   const resolveProvider = createProviderResolver({
-    getActiveProviderRuntime: (kind) => getActiveProviderRuntime(prisma, kind)
+    getActiveProviderRuntime: (kind) => getActiveProviderRuntime(prisma, kind),
+    timeoutMs: env.COVORA_LLM_TIMEOUT_MS
   })
 
   // Review worker'ı: kuyruktan kapar, çekirdek yürütücüsüyle koşturur.
