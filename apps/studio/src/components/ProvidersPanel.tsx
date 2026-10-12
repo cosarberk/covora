@@ -284,7 +284,7 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
                   <td className="mono">{provider.baseUrl}</td>
                   <td className="mono">
                     {provider.model}
-                    {provider.hasApiKey && <span className="badge"> 🔑</span>}
+                    {provider.hasApiKey && <span className="badge">anahtar</span>}
                   </td>
                   <td>
                     <span className={provider.active ? 'badge badge--pass' : 'badge'}>

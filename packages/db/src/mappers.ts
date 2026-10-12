@@ -182,6 +182,7 @@ export const toReviewRun = (
   kind: run.kind,
   codeHash: run.codeHash,
   status: run.status,
+  ...(run.reviewId !== null ? { reviewId: run.reviewId } : {}),
   ...(queuePosition !== undefined ? { queuePosition } : {}),
   steps: [...steps].sort((a, b) => a.order - b.order).map(toRunStep),
   createdAt: run.createdAt.toISOString(),

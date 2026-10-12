@@ -130,36 +130,43 @@ export const createCovoraClient = (config: CovoraClientConfig): CovoraClient => 
     let buffer = ''
     let lastRun: ReviewRun | null = null
 
-    for (;;) {
-      const { value, done } = await reader.read()
-      if (done) {
-        break
+    // Okuma döngüsü try içinde: akış ORTADA koparsa (ör. proxy/ingress uzun AI
+    // adımında sessiz bağlantıyı kesti) hata fırlatıp çağıranı "failed to fetch"
+    // ile düşürmek yerine sessizce çık; follow() polling'e düşüp sonucu alır.
+    try {
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) {
+          break
+        }
+        buffer += decoder.decode(value, { stream: true })
+        const chunks = buffer.split('\n\n')
+        buffer = chunks.pop() ?? ''
+        for (const chunk of chunks) {
+          const dataLine = chunk.split('\n').find((line) => line.startsWith('data:'))
+          if (dataLine === undefined) {
+            continue
+          }
+          let event: RunEvent
+          try {
+            event = JSON.parse(dataLine.slice(5).trim()) as RunEvent
+          } catch {
+            continue
+          }
+          onProgress?.(event)
+          if (event.type === 'run.created' || event.type === 'run.finished') {
+            lastRun = event.run
+          }
+          if (event.type === 'run.finished') {
+            void reader.cancel()
+            return event.run
+          }
+        }
       }
-      buffer += decoder.decode(value, { stream: true })
-      const chunks = buffer.split('\n\n')
-      buffer = chunks.pop() ?? ''
-      for (const chunk of chunks) {
-        const dataLine = chunk.split('\n').find((line) => line.startsWith('data:'))
-        if (dataLine === undefined) {
-          continue
-        }
-        let event: RunEvent
-        try {
-          event = JSON.parse(dataLine.slice(5).trim()) as RunEvent
-        } catch {
-          continue
-        }
-        onProgress?.(event)
-        if (event.type === 'run.created' || event.type === 'run.finished') {
-          lastRun = event.run
-        }
-        if (event.type === 'run.finished') {
-          void reader.cancel()
-          return event.run
-        }
-      }
+    } catch {
+      // Akış koptu: aşağıda polling'e düşülür (null dönerek).
     }
-    // Akış terminal olmadan kapandı; son bilinen run (varsa) terminal mi?
+    // Akış terminal olmadan kapandı/koptu; son bilinen run (varsa) terminal mi?
     return lastRun !== null && isTerminal(lastRun.status) ? lastRun : null
   }
 

@@ -33,7 +33,9 @@ import {
   getQueuePosition,
   getReviewResults,
   getRun,
+  getRunInput,
   getRunLogs,
+  getRunReport,
   listActiveWebhooks,
   listEnabledRules,
   listManagementRules,
@@ -134,7 +136,9 @@ const start = async (): Promise<void> => {
     listRuns: (options) => listRuns(prisma, options),
     getRun: (runId) => getRun(prisma, runId),
     getRunLogs: (runId, afterSeq) => getRunLogs(prisma, runId, afterSeq),
-    cancelRun: (runId) => cancelQueuedRun(prisma, runId)
+    cancelRun: (runId) => cancelQueuedRun(prisma, runId),
+    getRunInput: (runId) => getRunInput(prisma, runId),
+    getRunReport: (runId) => getRunReport(prisma, runId)
   }
 
   const managementDeps: ManagementDeps = {

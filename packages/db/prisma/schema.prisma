@@ -176,6 +176,9 @@ model Review {
   gatePassed Boolean
   /// Bir önceki aynı tür review'a göre skor farkı (ilk review'da null).
   delta      Float?
+  /// Uçtan uca review sonucu (coverage dökümü + gate gerekçeleri). Studio
+  /// rapor ekranı bunu sadık biçimde gösterir; eski kayıtlarda null olabilir.
+  outcome    Json?
   createdAt  DateTime       @default(now())
   results    ReviewResult[]
   run        ReviewRun?
