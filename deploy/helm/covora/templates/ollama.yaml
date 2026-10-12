@@ -56,12 +56,18 @@ spec:
                       ollama pull {{ .Values.ollama.models.ui }}
                       ollama pull {{ .Values.ollama.models.code }}
                     ) >/tmp/pull.log 2>&1 &
+          # CPU'da model yüklemesi dakikalarca sürer; bu sırada `/` geç cevap
+          # verir. Probe toleranslı olmazsa pod "NotReady" olur, Service'ten
+          # düşer ve Covora Ollama'ya ulaşamaz (timeout). 30×60 = 1800sn ≈ 30 dk
+          # yükleme toleransı.
           readinessProbe:
             httpGet:
               path: /
               port: 11434
-            initialDelaySeconds: 10
-            periodSeconds: 10
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 60
       volumes:
         - name: models
           persistentVolumeClaim:
