@@ -1550,3 +1550,124 @@ img {
     width: 240px;
   }
 }
+
+/* ================================================================== *
+ * Faz 3 — genel tasarım cilası (tüm panellerin paylaştığı katman)
+ * ================================================================== */
+:root {
+  --ring: 0 0 0 3px rgba(124, 140, 248, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 6px 24px rgba(0, 0, 0, 0.28);
+}
+
+/* Klavye için erişilebilir odak halkası */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+.input:focus-visible,
+.select:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* Topbar: hafif derinlik + marka işareti */
+.topbar {
+  box-shadow: var(--shadow-sm);
+  z-index: 5;
+}
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.topbar__brand::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--accent), #5be0c0);
+  flex-shrink: 0;
+}
+
+/* Nav: aktif öğe sol şerit göstergesi */
+.navitem {
+  position: relative;
+  transition: background 0.12s, color 0.12s;
+}
+.navitem.is-active::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 7px;
+  bottom: 7px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+/* Butonlar: primary gradyan + basma geri-bildirimi */
+.button {
+  background: linear-gradient(135deg, var(--accent), #6f7ef5);
+  box-shadow: var(--shadow-sm);
+}
+.button:active:not(:disabled),
+.btn-secondary:active {
+  transform: translateY(1px);
+}
+.btn-secondary {
+  transition: background 0.12s, border-color 0.12s, transform 0.06s;
+}
+.btn-secondary:hover {
+  border-color: var(--accent);
+}
+
+/* Inputlar: yalnız sınır değil, odak halkası */
+.input:focus,
+.select:focus {
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+/* Tablolar + kartlar: yumuşak gölge + geçiş */
+.table,
+.stat-card,
+.settings__group,
+.ingest,
+.sparkline-wrap,
+.rule-form {
+  box-shadow: var(--shadow-sm);
+}
+.table tbody tr {
+  transition: background 0.1s;
+}
+
+/* Stat kartları: üstte ince aksan şerit + hover kalkışı */
+.stat-card {
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.12s, transform 0.12s;
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent 70%);
+  opacity: 0.75;
+}
+.stat-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+/* Tabs geçişi + sayfa başlığı hiyerarşisi */
+.tab {
+  transition: color 0.12s, background 0.12s;
+}
+.page__title {
+  font-size: 23px;
+}
