@@ -238,7 +238,7 @@ export const App = (): React.JSX.Element => {
         </aside>
 
         <main className="content">
-          <div className="page">
+          <div className={view === 'processes' ? 'page page--full' : 'page'}>
             {error !== null && <div className="state state--error">{error}</div>}
 
             {view === 'dashboard' ? (

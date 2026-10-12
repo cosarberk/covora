@@ -17,7 +17,9 @@ import type {
   ProviderConfig,
   ProviderHealth,
   ProviderType,
+  ReviewInput,
   ReviewKind,
+  ReviewOutcome,
   ReviewRun,
   Rule,
   RuleEvaluationType,
@@ -60,6 +62,20 @@ export interface ProjectSummary {
   readonly name: string
   /** Makine istemcilerinin review göndermek için kullandığı gizli token. */
   readonly ingestToken: string
+}
+
+/** Bir run'ın saklı review girdisi (ekran görüntüsü / dosyalar). */
+export interface RunInput {
+  readonly kind: ReviewKind
+  readonly input: ReviewInput
+}
+
+/** Bir run'ın ürettiği review'ın raporu (kural sonuçları + tam döküm). */
+export interface RunReport {
+  readonly reviewId: string
+  readonly results: readonly RuleResult[]
+  /** Tam coverage/gate dökümü; eski kayıtlarda saklanmadıysa null. */
+  readonly outcome: ReviewOutcome | null
 }
 
 /** Review geçmişi kaydı. */
@@ -148,6 +164,10 @@ export interface StudioApi {
   listRuns(projectKey?: string): Promise<readonly RunSummary[]>
   /** Bir run'ın tam görünümünü getirir. */
   getRun(id: string): Promise<ReviewRun>
+  /** Bir run'ın saklı review girdisini (ekran görüntüsü / dosyalar) getirir. */
+  getRunInput(id: string): Promise<RunInput>
+  /** Bir run'ın ürettiği review'ın raporunu (kural sonuçları + döküm) getirir. */
+  getRunReport(id: string): Promise<RunReport>
   /** Bir run'ın loglarını getirir. */
   getRunLogs(id: string, afterSeq?: number): Promise<readonly RunLogLine[]>
   /** Kuyruktaki bir run'ı iptal eder. */
@@ -333,6 +353,14 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
 
     async getRun(id) {
       return json<ReviewRun>(await authFetch(`/runs/${encodeURIComponent(id)}`))
+    },
+
+    async getRunInput(id) {
+      return json<RunInput>(await authFetch(`/runs/${encodeURIComponent(id)}/input`))
+    },
+
+    async getRunReport(id) {
+      return json<RunReport>(await authFetch(`/runs/${encodeURIComponent(id)}/report`))
     },
 
     async getRunLogs(id, afterSeq) {
