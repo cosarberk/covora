@@ -6,7 +6,14 @@
  * kuyruktaki run'ı iptal.
  */
 
-import type { ReviewRun, RunLogLine, RunSummary } from '@covora/types'
+import type {
+  ReviewKind,
+  ReviewOutcome,
+  ReviewRun,
+  RuleResult,
+  RunLogLine,
+  RunSummary
+} from '@covora/types'
 import type { FastifyInstance } from 'fastify'
 
 import type { RunEventBus } from '../services/events.js'
@@ -28,6 +35,16 @@ export interface RunRoutesDeps {
   readonly getRunLogs: (runId: string, afterSeq?: number) => Promise<readonly RunLogLine[]>
   /** Kuyruktaki bir run'ı iptal eder. */
   readonly cancelRun: (runId: string) => Promise<boolean>
+  /** Bir run'ın saklı review girdisini (ekran görüntüsü / dosyalar) getirir. */
+  readonly getRunInput: (
+    runId: string
+  ) => Promise<{ readonly kind: ReviewKind; readonly input: unknown } | null>
+  /** Bir run'ın ürettiği review'ın raporunu (kural sonuçları + tam döküm) getirir. */
+  readonly getRunReport: (runId: string) => Promise<{
+    readonly reviewId: string
+    readonly results: readonly RuleResult[]
+    readonly outcome: ReviewOutcome | null
+  } | null>
 }
 
 /**
@@ -73,6 +90,24 @@ export const registerRunRoutes = (app: FastifyInstance, deps: RunRoutesDeps): vo
       afterSeq !== undefined && Number.isFinite(afterSeq) ? afterSeq : undefined
     )
     return reply.send({ logs })
+  })
+
+  app.get('/runs/:id/input', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const data = await deps.getRunInput(id)
+    if (data === null) {
+      return reply.status(404).send({ error: 'Run bulunamadı' })
+    }
+    return reply.send(data)
+  })
+
+  app.get('/runs/:id/report', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const report = await deps.getRunReport(id)
+    if (report === null) {
+      return reply.status(404).send({ error: 'Bu run henüz bir sonuç üretmedi' })
+    }
+    return reply.send(report)
   })
 
   app.get('/runs/:id/events', async (request, reply) => {

@@ -168,6 +168,8 @@ export const reviewRunSchema = z.object({
   codeHash: z.string().min(1),
   /** Yürütme durumu. */
   status: runStatusSchema,
+  /** Üretilen review kaydının kimliği (tamamlanıp sonuç ürettiyse). */
+  reviewId: z.string().min(1).optional(),
   /** Kuyruktaki sıra (yalnızca `queued` iken anlamlı; 1 = sıradaki ilk iş). */
   queuePosition: z.number().int().positive().optional(),
   /** Pipeline adımları (sıralı). */

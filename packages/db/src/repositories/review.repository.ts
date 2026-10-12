@@ -4,8 +4,8 @@
  * Review kaydı veri erişimi.
  */
 
-import type { ReviewKind, ReviewOutcome, RuleResult } from '@covora/types'
-import type { PrismaClient } from '@prisma/client'
+import { reviewOutcomeSchema, type ReviewKind, type ReviewOutcome, type RuleResult } from '@covora/types'
+import type { Prisma, PrismaClient } from '@prisma/client'
 
 /** Bir review sonucunu kalıcılaştırmak için gerekli alanlar. */
 export interface SaveReviewInput {
@@ -60,6 +60,7 @@ export const saveReview = async (prisma: PrismaClient, input: SaveReviewInput): 
       level: input.outcome.coverage.level,
       gatePassed: input.outcome.gate.passed,
       delta: input.delta ?? null,
+      outcome: input.outcome as unknown as Prisma.InputJsonValue,
       results: {
         create: input.outcome.coverage.ruleResults.map((result) =>
           result.note !== undefined
@@ -93,6 +94,30 @@ export const getReviewResults = async (
       ? { ruleId: result.ruleKey, outcome: result.outcome, note: result.note }
       : { ruleId: result.ruleKey, outcome: result.outcome }
   )
+}
+
+/**
+ * Bir review'ın saklı uçtan uca sonucunu (coverage dökümü + gate gerekçeleri)
+ * getirir. Eski kayıtlarda `outcome` saklanmadıysa (null) ya da şema
+ * uyuşmuyorsa null döner.
+ *
+ * @param prisma - Prisma client.
+ * @param reviewId - Review kimliği.
+ * @returns Saklı {@link ReviewOutcome} ya da null.
+ */
+export const getReviewOutcome = async (
+  prisma: PrismaClient,
+  reviewId: string
+): Promise<ReviewOutcome | null> => {
+  const review = await prisma.review.findUnique({
+    where: { id: reviewId },
+    select: { outcome: true }
+  })
+  if (review === null || review.outcome === null) {
+    return null
+  }
+  const parsed = reviewOutcomeSchema.safeParse(review.outcome)
+  return parsed.success ? parsed.data : null
 }
 
 /**

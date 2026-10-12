@@ -13,7 +13,9 @@ import type {
   LogLevel,
   ReviewInput,
   ReviewKind,
+  ReviewOutcome,
   ReviewRun,
+  RuleResult,
   RunLogLine,
   RunStatus,
   RunSummary,
@@ -22,6 +24,7 @@ import type {
 import type { Prisma, PrismaClient } from '@prisma/client'
 
 import { toReviewRun, toRunLogLine, toRunSummary } from '../mappers.js'
+import { getReviewOutcome, getReviewResults } from './review.repository.js'
 
 /** Yeni run oluşturma girdisi. */
 export interface CreateRunInput {
@@ -277,6 +280,56 @@ export const getRun = async (prisma: PrismaClient, runId: string): Promise<Revie
   }
   const queuePosition = run.status === 'queued' ? await getQueuePosition(prisma, runId) : undefined
   return toReviewRun(run, run.project.key, run.steps, run.review, queuePosition)
+}
+
+/**
+ * Bir run'ın saklı review girdisini (UI için ekran görüntüsü, code için
+ * dosyalar) getirir. Girdi worker işledikten sonra da saklanır; Studio
+ * "gönderilen görsel/girdi" görünümü bunu kullanır.
+ *
+ * @param prisma - Prisma client.
+ * @param runId - Run kimliği.
+ * @returns Türü ve ham girdi JSON'ı ya da (run yoksa) null.
+ */
+export const getRunInput = async (
+  prisma: PrismaClient,
+  runId: string
+): Promise<{ readonly kind: ReviewKind; readonly input: unknown } | null> => {
+  const run = await prisma.reviewRun.findUnique({
+    where: { id: runId },
+    select: { kind: true, input: true }
+  })
+  return run === null ? null : { kind: run.kind, input: run.input }
+}
+
+/**
+ * Bir run'ın ürettiği review'ın raporunu getirir: kural-kural sonuçlar
+ * (pass/partial/fail + not) ve (yeni kayıtlarda) tam coverage/gate dökümü.
+ *
+ * @param prisma - Prisma client.
+ * @param runId - Run kimliği.
+ * @returns Rapor ya da (run bir review üretmediyse) null.
+ */
+export const getRunReport = async (
+  prisma: PrismaClient,
+  runId: string
+): Promise<{
+  readonly reviewId: string
+  readonly results: RuleResult[]
+  readonly outcome: ReviewOutcome | null
+} | null> => {
+  const run = await prisma.reviewRun.findUnique({
+    where: { id: runId },
+    select: { reviewId: true }
+  })
+  if (run === null || run.reviewId === null) {
+    return null
+  }
+  const [results, outcome] = await Promise.all([
+    getReviewResults(prisma, run.reviewId),
+    getReviewOutcome(prisma, run.reviewId)
+  ])
+  return { reviewId: run.reviewId, results, outcome }
 }
 
 /** Bir run'ın log satırlarını (opsiyonel olarak verilen seq'ten sonrasını) getirir. */
