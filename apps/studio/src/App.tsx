@@ -36,11 +36,11 @@ const serverUrl = import.meta.env.VITE_COVORA_SERVER_URL ?? ''
 const defaultApi = createStudioApi({ baseUrl: serverUrl })
 
 type Tab = 'packs' | 'rules' | 'reviews' | 'webhooks' | 'settings' | 'integration'
-type View = 'dashboard' | 'project' | 'providers' | 'packs' | 'processes'
+type View = 'dashboard' | 'projects' | 'project' | 'providers' | 'packs' | 'processes'
 
 const PROJECT_TABS: readonly { readonly id: Tab; readonly icon: IconName; readonly label: string }[] = [
-  { id: 'packs', icon: 'packages', label: 'Paketler' },
   { id: 'rules', icon: 'rules', label: 'Kurallar' },
+  { id: 'packs', icon: 'packages', label: 'Abone Paketler' },
   { id: 'reviews', icon: 'reviews', label: 'Review Geçmişi' },
   { id: 'integration', icon: 'plug', label: 'Entegrasyon' },
   { id: 'webhooks', icon: 'webhook', label: 'Bildirimler' },
@@ -49,12 +49,11 @@ const PROJECT_TABS: readonly { readonly id: Tab; readonly icon: IconName; readon
 
 const NAV: readonly { readonly id: View; readonly icon: IconName; readonly label: string }[] = [
   { id: 'dashboard', icon: 'dashboard', label: 'Genel Bakış' },
+  { id: 'projects', icon: 'project', label: 'Projeler' },
   { id: 'processes', icon: 'flow', label: 'Süreçler' },
   { id: 'packs', icon: 'packages', label: 'Review Paketleri' },
   { id: 'providers', icon: 'ai', label: 'AI Sağlayıcılar' }
 ]
-
-const MENU: readonly string[] = ['Dosya', 'Düzen', 'Görünüm', 'Çalıştır', 'Yardım']
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value))
@@ -65,15 +64,22 @@ export interface AppProps {
   readonly initialUser?: User | null
   /** Önizleme için başlangıç görünümü. */
   readonly initialView?: View
+  /** Önizleme için açılacak proje anahtarı (project görünümünde). */
+  readonly initialProjectKey?: string
 }
 
 /** Studio uygulaması. */
-export const App = ({ api = defaultApi, initialUser, initialView }: AppProps = {}): React.JSX.Element => {
+export const App = ({
+  api = defaultApi,
+  initialUser,
+  initialView,
+  initialProjectKey
+}: AppProps = {}): React.JSX.Element => {
   const presetAuth = initialUser !== undefined
   const [user, setUser] = useState<User | null>(initialUser ?? null)
   const [authReady, setAuthReady] = useState(presetAuth)
   const [projects, setProjects] = useState<readonly ProjectSummary[]>([])
-  const [selected, setSelected] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string | null>(initialProjectKey ?? null)
   const [view, setView] = useState<View>(initialView ?? 'dashboard')
   const [tab, setTab] = useState<Tab>('packs')
   const [error, setError] = useState<string | null>(null)
@@ -276,6 +282,50 @@ export const App = ({ api = defaultApi, initialUser, initialView }: AppProps = {
     if (view === 'processes') {
       return <ProcessGraph proc={proc} />
     }
+    if (view === 'projects') {
+      return (
+        <div className="projgrid">
+          <button type="button" className="projcard projcard--add" onClick={() => setAddOpen((open) => !open)}>
+            <Icon name="plus" size={20} />
+            <span>Yeni proje</span>
+          </button>
+          {addOpen && (
+            <form className="projcard projcard--form" onSubmit={(event) => void createProject(event)}>
+              <input
+                className="input input--sm"
+                placeholder="anahtar (örn. web-app)"
+                value={newKey}
+                onChange={(event) => setNewKey(event.target.value)}
+                autoFocus
+              />
+              <input
+                className="input input--sm"
+                placeholder="görünen ad"
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+              />
+              <button className="button button--sm" type="submit">Oluştur</button>
+            </form>
+          )}
+          {projects.map((project) => (
+            <div key={project.id} className="projcard">
+              <button type="button" className="projcard__open" onClick={() => openProject(project.key)}>
+                <span className="projcard__icon"><Icon name="project" size={16} /></span>
+                <span className="projcard__name">{project.name}</span>
+                <span className="projcard__key mono">{project.key}</span>
+              </button>
+              <div className="projcard__foot">
+                <button type="button" className="link-button" onClick={() => openProject(project.key)}>Aç</button>
+                <button type="button" className="link-button link-button--danger" onClick={() => void removeProject(project.key)}>Sil</button>
+              </div>
+            </div>
+          ))}
+          {projects.length === 0 && !addOpen && (
+            <div className="state projgrid__empty">Henüz proje yok. "Yeni proje" ile başla.</div>
+          )}
+        </div>
+      )
+    }
     if (view === 'packs') {
       return <PacksPanel api={api} />
     }
@@ -283,7 +333,7 @@ export const App = ({ api = defaultApi, initialUser, initialView }: AppProps = {
       return <ProvidersPanel api={api} />
     }
     if (selectedProject === null) {
-      return <div className="state">Sağdaki Gezgin’den bir proje seç ya da oluştur.</div>
+      return <div className="state">Bir proje seçili değil. Projeler ekranından bir proje aç.</div>
     }
     if (tab === 'packs') {
       return <ProjectPacksPanel api={api} projectKey={selectedProject.key} />
@@ -316,34 +366,196 @@ export const App = ({ api = defaultApi, initialUser, initialView }: AppProps = {
     return <SettingsPanel api={api} projectKey={selectedProject.key} />
   }
 
+  // Sağ dock'un bağlam (Özellikler) gövdesi — global ekranlarda ekrana özel.
+  const renderDockContext = (): React.JSX.Element => {
+    if (view === 'packs') {
+      return (
+        <>
+          <div className="props__name">Review Paketleri</div>
+          <p className="props__desc">
+            Kural koleksiyonları. Her pack tek bir türe (UI ya da kod) aittir; projeler
+            paketlere abone olup kuralları miras alır.
+          </p>
+          <div className="props__group">İpuçları</div>
+          <ul className="props__hints">
+            <li>Yerleşik paketler silinemez.</li>
+            <li>Bir paketin kurallarını "Kurallar" ile aç/düzenle.</li>
+            <li>UI paketleri UI review'da, kod paketleri kod review'da çalışır.</li>
+          </ul>
+        </>
+      )
+    }
+    if (view === 'providers') {
+      return (
+        <>
+          <div className="props__name">AI Sağlayıcılar</div>
+          <p className="props__desc">
+            Ollama / OpenAI-uyumlu LLM uç noktaları. AI kuralları bu sağlayıcılarla
+            değerlendirilir.
+          </p>
+          <div className="props__group">İpuçları</div>
+          <ul className="props__hints">
+            <li>Modeli "RAM'e yükle" ile ısıtıp ilk-istek gecikmesini düşür.</li>
+            <li>"Sağlık" ile uç noktanın erişilebilirliğini test et.</li>
+            <li>AI'sız (deterministik) kurallar sağlayıcı gerektirmez.</li>
+          </ul>
+        </>
+      )
+    }
+    if (view === 'projects') {
+      return (
+        <>
+          <div className="props__name">Projeler</div>
+          <p className="props__desc">
+            Her proje; abone paketleri, kuralları, review geçmişi, entegrasyon token'ı ve
+            bildirimleriyle bağımsız bir review birimidir.
+          </p>
+          <div className="props__stat">
+            <span>Toplam proje</span>
+            <b>{projects.length}</b>
+          </div>
+        </>
+      )
+    }
+    // dashboard
+    return (
+      <>
+        <div className="props__name">Çalışma alanı</div>
+        <div className="props__stat">
+          <span>Proje</span>
+          <b>{projects.length}</b>
+        </div>
+        <p className="props__desc">
+          Tüm projeler genelinde özet, gate oranı, sağlayıcı sağlığı ve son review'lar
+          merkezdeki panodadır.
+        </p>
+      </>
+    )
+  }
+
+  // Sağ dock — ekrana özel. Süreçler ve proje çalışma alanı iki bölgeli
+  // (navigator + inspector); diğer global ekranlar tek bağlam paneli.
+  const renderDock = (): React.JSX.Element => {
+    if (view === 'processes') {
+      return (
+        <>
+          <div className="area area--outliner" style={{ height: outlinerH }}>
+            <div className="area__head">
+              <span className="area__title">Pipeline’lar</span>
+            </div>
+            <div className="area__body area__body--flush">
+              <ProcessRunList
+                proc={proc}
+                projects={projects.map((project) => ({ key: project.key, name: project.name }))}
+              />
+            </div>
+          </div>
+          <Splitter dir="row" onDrag={(d) => setOutlinerH((h) => clamp(h + d, 120, 520))} />
+          <div className="area area--props">
+            <div className="area__head">
+              <span className="area__title">Özellikler</span>
+            </div>
+            <div className="area__body props">
+              <ProcessInspector proc={proc} />
+            </div>
+          </div>
+        </>
+      )
+    }
+
+    if (view === 'project' && selectedProject !== null) {
+      return (
+        <>
+          <div className="area area--outliner" style={{ height: outlinerH }}>
+            <div className="area__head">
+              <Icon name="project" size={13} />
+              <span className="area__title">Bölümler</span>
+            </div>
+            <div className="area__body outliner">
+              {PROJECT_TABS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={tab === item.id ? 'tree__row is-active' : 'tree__row'}
+                  onClick={() => setTab(item.id)}
+                >
+                  <Icon name={item.icon} size={14} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <Splitter dir="row" onDrag={(d) => setOutlinerH((h) => clamp(h + d, 120, 520))} />
+          <div className="area area--props">
+            <div className="area__head">
+              <span className="area__title">Proje</span>
+            </div>
+            <div className="area__body props">
+              <div className="props__name">{selectedProject.name}</div>
+              <div className="props__key mono">{selectedProject.key}</div>
+              <div className="props__row">
+                <span className="props__label">Ingest token</span>
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => void copyToken(selectedProject.ingestToken)}
+                >
+                  {copied ? 'Kopyalandı ✓' : 'Kopyala'}
+                </button>
+              </div>
+              <code className="props__token mono">{selectedProject.ingestToken}</code>
+              <button
+                type="button"
+                className="btn-secondary btn-secondary--sm props__danger"
+                onClick={() => void removeProject(selectedProject.key)}
+              >
+                Projeyi Sil
+              </button>
+            </div>
+          </div>
+        </>
+      )
+    }
+
+    return (
+      <div className="area area--props area--dockfull">
+        <div className="area__head">
+          <Icon name={viewportIcon} size={13} />
+          <span className="area__title">Bağlam</span>
+        </div>
+        <div className="area__body props">{renderDockContext()}</div>
+      </div>
+    )
+  }
+
   const isProcesses = view === 'processes'
 
   return (
     <div className="editor">
-      {/* Üst şerit: logo + menüler + çalışma alanı sekmeleri + kullanıcı */}
+      {/* Üst şerit: logo + konum (breadcrumb) + komut paleti + kullanıcı */}
       <div className="tbar">
         <span className="tbar__logo" />
         <span className="tbar__title">Covora Studio</span>
-        <nav className="tbar__menu">
-          {MENU.map((item) => (
-            <button key={item} type="button" className="tbar__menuitem">
-              {item}
-            </button>
-          ))}
+        <nav className="crumbs" aria-label="Konum">
+          <button
+            type="button"
+            className={view === 'project' ? 'crumb crumb--link' : 'crumb crumb--cur'}
+            onClick={() => view === 'project' && goView('projects')}
+          >
+            <Icon name={view === 'project' ? 'project' : viewportIcon} size={13} />
+            {view === 'project' ? 'Projeler' : (activeNav?.label ?? 'Genel Bakış')}
+          </button>
+          {view === 'project' && selectedProject !== null && (
+            <>
+              <span className="crumb__sep">›</span>
+              <span className="crumb crumb--cur">{selectedProject.name}</span>
+              <span className="crumb__sep">·</span>
+              <span className="crumb crumb--muted">
+                {PROJECT_TABS.find((t) => t.id === tab)?.label ?? ''}
+              </span>
+            </>
+          )}
         </nav>
-        <span className="tbar__wstabs">
-          {NAV.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={view === item.id ? 'wstab is-active' : 'wstab'}
-              onClick={() => goView(item.id)}
-            >
-              <Icon name={item.icon} size={14} />
-              {item.label}
-            </button>
-          ))}
-        </span>
         <span className="tbar__spacer" />
         <button type="button" className="cmdk-trigger" onClick={() => setCmdkOpen(true)}>
           <Icon name="search" size={13} />
@@ -439,160 +651,8 @@ export const App = ({ api = defaultApi, initialUser, initialView }: AppProps = {
 
         <Splitter dir="col" onDrag={(d) => setRightW((w) => clamp(w - d, 230, 560))} />
 
-        {/* Sağ dock: Gezgin + Özellikler */}
-        <div className="editor__right" style={{ width: rightW }}>
-          <div className="area area--outliner" style={{ height: outlinerH }}>
-            <div className="area__head">
-              <span className="area__title">{view === 'processes' ? 'Pipeline’lar' : 'Gezgin'}</span>
-              <span className="area__spacer" />
-              {view !== 'processes' && (
-                <button
-                  type="button"
-                  className="area__btn"
-                  title="Proje ekle"
-                  onClick={() => setAddOpen((open) => !open)}
-                >
-                  <Icon name="plus" size={13} />
-                </button>
-              )}
-            </div>
-            {view === 'processes' ? (
-              <div className="area__body area__body--flush">
-                <ProcessRunList
-                  proc={proc}
-                  projects={projects.map((project) => ({ key: project.key, name: project.name }))}
-                />
-              </div>
-            ) : (
-            <div className="area__body outliner">
-              <div className="tree__group">Görünümler</div>
-              {NAV.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={view === item.id ? 'tree__row is-active' : 'tree__row'}
-                  onClick={() => goView(item.id)}
-                >
-                  <Icon name={item.icon} size={14} />
-                  <span>{item.label}</span>
-                </button>
-              ))}
-
-              <div className="tree__group">Projeler</div>
-              {addOpen && (
-                <form className="addproj" onSubmit={(event) => void createProject(event)}>
-                  <input
-                    className="input input--sm"
-                    placeholder="anahtar"
-                    value={newKey}
-                    onChange={(event) => setNewKey(event.target.value)}
-                    autoFocus
-                  />
-                  <input
-                    className="input input--sm"
-                    placeholder="ad"
-                    value={newName}
-                    onChange={(event) => setNewName(event.target.value)}
-                  />
-                  <button className="button button--sm" type="submit">
-                    Ekle
-                  </button>
-                </form>
-              )}
-              {projects.map((project) => (
-                <div
-                  key={project.id}
-                  className={
-                    project.key === selected && view === 'project'
-                      ? 'tree__row tree__row--proj is-active'
-                      : 'tree__row tree__row--proj'
-                  }
-                >
-                  <button type="button" className="tree__projbtn" onClick={() => openProject(project.key)}>
-                    <Icon name="project" size={14} />
-                    <span>{project.name}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="tree__del"
-                    title="Sil"
-                    onClick={() => void removeProject(project.key)}
-                  >
-                    <Icon name="close" size={12} />
-                  </button>
-                </div>
-              ))}
-              {projects.length === 0 && <div className="tree__empty">Henüz proje yok</div>}
-            </div>
-            )}
-          </div>
-
-          <Splitter dir="row" onDrag={(d) => setOutlinerH((h) => clamp(h + d, 120, 520))} />
-
-          <div className="area area--props">
-            <div className="area__head">
-              <span className="area__title">Özellikler</span>
-            </div>
-            <div className="area__body props">
-              {view === 'processes' ? (
-                <ProcessInspector proc={proc} />
-              ) : view === 'project' && selectedProject !== null ? (
-                <>
-                  <div className="props__name">{selectedProject.name}</div>
-                  <div className="props__key mono">{selectedProject.key}</div>
-                  <div className="props__row">
-                    <span className="props__label">Ingest token</span>
-                    <button
-                      type="button"
-                      className="link-button"
-                      onClick={() => void copyToken(selectedProject.ingestToken)}
-                    >
-                      {copied ? 'Kopyalandı ✓' : 'Kopyala'}
-                    </button>
-                  </div>
-                  <code className="props__token mono">{selectedProject.ingestToken}</code>
-                  <div className="props__group">Bölümler</div>
-                  <div className="props__tabs">
-                    {PROJECT_TABS.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={tab === item.id ? 'props__tab is-active' : 'props__tab'}
-                        onClick={() => setTab(item.id)}
-                      >
-                        <Icon name={item.icon} size={14} />
-                        <span>{item.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-secondary btn-secondary--sm props__danger"
-                    onClick={() => void removeProject(selectedProject.key)}
-                  >
-                    Projeyi Sil
-                  </button>
-                </>
-              ) : (
-                <div className="props__context">
-                  <div className="props__name">{activeNav?.label ?? 'Genel Bakış'}</div>
-                  <p className="props__desc">
-                    {view === 'dashboard'
-                      ? 'Tüm projeler genelinde özet, gate oranı ve son review’lar.'
-                      : view === 'packs'
-                        ? 'Kural koleksiyonları. Projeler bu paketlere abone olur.'
-                        : 'AI sağlayıcıları (Ollama / OpenAI-uyumlu). Model yükle/boşalt.'}
-                  </p>
-                  <div className="props__group">Çalışma alanı</div>
-                  <div className="props__stat">
-                    <span>Proje</span>
-                    <b>{projects.length}</b>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        {/* Sağ dock: ekrana özel (navigator + inspector ya da bağlam paneli) */}
+        <div className="editor__right" style={{ width: rightW }}>{renderDock()}</div>
       </div>
 
       {/* Durum çubuğu */}

@@ -95,7 +95,7 @@ export const ProcessGraph = ({ proc }: { readonly proc: ProcessesState }): React
     return (
       <div className="graph-empty">
         <div className="graph-empty__icon">⟲</div>
-        Soldaki Gezgin’den bir pipeline seç — akış grafiği burada açılır.
+        Sağdaki Pipeline’lar listesinden bir çalıştırma seç — akış grafiği burada açılır.
       </div>
     )
   }
