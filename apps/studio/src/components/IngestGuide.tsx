@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react'
 
 import type { StudioApi } from '../api/client.js'
 import { Icon } from './Icon.js'
+import { confirmDialog, toast } from './overlays.js'
 
 /** {@link IngestGuide} props. */
 export interface IngestGuideProps {
@@ -72,9 +73,13 @@ export const IngestGuide = ({
     if (api === undefined) {
       return
     }
-    const ok = globalThis.confirm(
-      'Ingest token yenilensin mi? Eski token derhal geçersiz olur ve bu token’ı kullanan tüm pipeline’ların güncellenmesi gerekir.'
-    )
+    const ok = await confirmDialog({
+      title: 'Ingest token yenile',
+      message:
+        'Eski token derhal geçersiz olur ve bu token’ı kullanan tüm pipeline’ların yeni token ile güncellenmesi gerekir.',
+      confirmLabel: 'Yenile',
+      danger: true
+    })
     if (!ok) {
       return
     }
@@ -83,8 +88,9 @@ export const IngestGuide = ({
       await api.rotateIngestToken(projectKey)
       setRevealed(true)
       onRotated?.()
-    } catch {
-      /* hata üst katmanda görünür; sessiz geç */
+      toast.success('Ingest token yenilendi')
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'Token yenilenemedi')
     } finally {
       setRotating(false)
     }

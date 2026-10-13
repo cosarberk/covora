@@ -20,6 +20,7 @@ import { Splitter } from './components/Splitter.js'
 import { DashboardPanel } from './components/DashboardPanel.js'
 import { IngestGuide } from './components/IngestGuide.js'
 import { Login } from './components/Login.js'
+import { ConfirmHost, ToastHost, confirmDialog, toast } from './components/overlays.js'
 import { PacksPanel } from './components/PacksPanel.js'
 import { ProcessGraph, ProcessInspector, ProcessRunList } from './components/processes/regions.js'
 import { useProcesses } from './components/processes/useProcesses.js'
@@ -192,7 +193,13 @@ export const App = ({ api = defaultApi, initialUser, initialView }: AppProps = {
   }
 
   const removeProject = async (key: string): Promise<void> => {
-    if (!globalThis.confirm(`"${key}" projesi ve tüm kural/review'ları silinsin mi?`)) {
+    const ok = await confirmDialog({
+      title: 'Projeyi sil',
+      message: `"${key}" projesi ve tüm kural/review'ları kalıcı olarak silinecek. Bu işlem geri alınamaz.`,
+      confirmLabel: 'Sil',
+      danger: true
+    })
+    if (!ok) {
       return
     }
     try {
@@ -202,8 +209,9 @@ export const App = ({ api = defaultApi, initialUser, initialView }: AppProps = {
         setView('dashboard')
       }
       await loadProjects()
+      toast.success(`"${key}" silindi`)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Bilinmeyen hata')
+      toast.error(cause instanceof Error ? cause.message : 'Proje silinemedi')
     }
   }
 
@@ -597,6 +605,8 @@ export const App = ({ api = defaultApi, initialUser, initialView }: AppProps = {
       </footer>
 
       {cmdkOpen && <CommandPalette commands={commands} onClose={() => setCmdkOpen(false)} />}
+      <ToastHost />
+      <ConfirmHost />
     </div>
   )
 }

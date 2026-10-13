@@ -3779,3 +3779,108 @@ input:focus-visible,
   color: var(--fail);
   line-height: 1.6;
 }
+
+/* ---- Toast bildirimleri ---- */
+.toast-host {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-left-width: 3px;
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  color: var(--text);
+  animation: toast-in 0.18s ease-out;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.toast--success {
+  border-left-color: var(--pass);
+}
+.toast--error {
+  border-left-color: var(--fail);
+}
+.toast--warn {
+  border-left-color: var(--warn);
+}
+.toast--info {
+  border-left-color: var(--accent);
+}
+.toast__msg {
+  flex: 1;
+}
+.toast__close {
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.toast__close:hover {
+  color: var(--text);
+}
+
+/* ---- Onay modalı ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  background: rgba(4, 6, 10, 0.6);
+  display: grid;
+  place-items: center;
+  animation: toast-in 0.12s ease-out;
+}
+.modal {
+  width: min(440px, calc(100vw - 32px));
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 20px 22px;
+}
+.modal__title {
+  font-size: 15px;
+  font-weight: 650;
+  margin-bottom: 8px;
+}
+.modal__msg {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.55;
+  margin-bottom: 18px;
+}
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.button--danger {
+  background: var(--fail);
+  border-color: var(--fail);
+}
+.button--danger:hover {
+  background: #e05858;
+  border-color: #e05858;
+}

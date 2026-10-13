@@ -10,6 +10,7 @@ import type { Webhook, WebhookEvent } from '@covora/types'
 import { useCallback, useEffect, useState } from 'react'
 
 import type { CreateWebhookInput, StudioApi } from '../api/client.js'
+import { confirmDialog, toast } from './overlays.js'
 
 /** {@link WebhooksPanel} props. */
 export interface WebhooksPanelProps {
@@ -119,12 +120,19 @@ export const WebhooksPanel = ({ api, projectKey }: WebhooksPanelProps): React.JS
   }
 
   const remove = async (id: string): Promise<void> => {
-    if (!globalThis.confirm('Bu webhook silinsin mi?')) {
+    const ok = await confirmDialog({
+      title: 'Webhook sil',
+      message: 'Bu webhook kalıcı olarak silinecek.',
+      confirmLabel: 'Sil',
+      danger: true
+    })
+    if (!ok) {
       return
     }
     try {
       await api.deleteWebhook(id)
       await load()
+      toast.success('Webhook silindi')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Bilinmeyen hata')
     }

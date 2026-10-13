@@ -11,6 +11,7 @@ import type { ProviderConfig, ProviderHealth, ProviderType, ReviewKind } from '@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { CreateProviderInput, StudioApi } from '../api/client.js'
+import { confirmDialog } from './overlays.js'
 
 /** {@link ProvidersPanel} props. */
 export interface ProvidersPanelProps {
@@ -94,7 +95,13 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
   }
 
   const remove = async (id: string): Promise<void> => {
-    if (!globalThis.confirm('Bu sağlayıcı silinsin mi?')) {
+    const confirmed = await confirmDialog({
+      title: 'Sağlayıcı sil',
+      message: 'Bu AI sağlayıcı silinecek.',
+      confirmLabel: 'Sil',
+      danger: true
+    })
+    if (!confirmed) {
       return
     }
     try {
