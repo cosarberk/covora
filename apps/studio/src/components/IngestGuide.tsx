@@ -9,12 +9,17 @@
 
 import { useMemo, useState } from 'react'
 
+import type { StudioApi } from '../api/client.js'
 import { Icon } from './Icon.js'
 
 /** {@link IngestGuide} props. */
 export interface IngestGuideProps {
   readonly projectKey: string
   readonly ingestToken: string
+  /** Token yenileme için (verilmezse yenile butonu gizlenir). */
+  readonly api?: StudioApi
+  /** Token yenilendikten sonra üst bileşenin projeleri tazelemesi için. */
+  readonly onRotated?: () => void
 }
 
 type Tab = 'curl' | 'sdk-ui' | 'sdk-code' | 'cli' | 'ci'
@@ -53,9 +58,37 @@ const CodeBlock = ({ code }: { readonly code: string }): React.JSX.Element => {
 }
 
 /** Entegrasyon rehberi. */
-export const IngestGuide = ({ projectKey, ingestToken }: IngestGuideProps): React.JSX.Element => {
+export const IngestGuide = ({
+  projectKey,
+  ingestToken,
+  api,
+  onRotated
+}: IngestGuideProps): React.JSX.Element => {
   const [tab, setTab] = useState<Tab>('curl')
   const [revealed, setRevealed] = useState(false)
+  const [rotating, setRotating] = useState(false)
+
+  const rotate = async (): Promise<void> => {
+    if (api === undefined) {
+      return
+    }
+    const ok = globalThis.confirm(
+      'Ingest token yenilensin mi? Eski token derhal geçersiz olur ve bu token’ı kullanan tüm pipeline’ların güncellenmesi gerekir.'
+    )
+    if (!ok) {
+      return
+    }
+    setRotating(true)
+    try {
+      await api.rotateIngestToken(projectKey)
+      setRevealed(true)
+      onRotated?.()
+    } catch {
+      /* hata üst katmanda görünür; sessiz geç */
+    } finally {
+      setRotating(false)
+    }
+  }
 
   const server =
     typeof globalThis.location !== 'undefined' ? globalThis.location.origin : 'https://covora.ornek'
@@ -174,6 +207,16 @@ jobs:
           <button type="button" className="link-button" onClick={() => setRevealed((v) => !v)}>
             {revealed ? 'Gizle' : 'Göster'}
           </button>
+          {api !== undefined && (
+            <button
+              type="button"
+              className="link-button link-button--danger"
+              disabled={rotating}
+              onClick={() => void rotate()}
+            >
+              {rotating ? 'Yenileniyor…' : 'Yenile'}
+            </button>
+          )}
         </div>
         <p className="ingest-warn">
           Token, projene review gönderme yetkisi verir — gizli tutun, istemci koduna gömmek yerine

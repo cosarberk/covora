@@ -69,6 +69,8 @@ export interface ManagementDeps {
   readonly listProjects: () => Promise<readonly ProjectRecord[]>
   /** Bir projeyi anahtarına göre siler. */
   readonly deleteProject: (key: string) => Promise<void>
+  /** Projenin ingest token'ını yeniden üretir (rotasyon). */
+  readonly rotateIngestToken: (key: string) => Promise<{ readonly ingestToken: string }>
   /** Projenin abone olduğu pack'lerdeki tüm kuralları yönetim modeli olarak getirir. */
   readonly listRules: (projectId: string) => Promise<readonly ManagementRule[]>
   /** Tüm pack'leri listeler. */

@@ -152,6 +152,8 @@ export interface StudioApi {
   getDashboard(): Promise<DashboardSummary>
   listProjects(): Promise<readonly ProjectSummary[]>
   deleteProject(key: string): Promise<void>
+  /** Projenin ingest token'ını yeniden üretir; yeni token'ı döner. */
+  rotateIngestToken(key: string): Promise<{ readonly ingestToken: string }>
   listProviders(): Promise<readonly ProviderConfig[]>
   createProvider(input: CreateProviderInput): Promise<ProviderConfig>
   activateProvider(id: string): Promise<void>
@@ -312,6 +314,12 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
 
     async deleteProject(key) {
       ok(await authFetch(projectPath(key), { method: 'DELETE' }))
+    },
+
+    async rotateIngestToken(key) {
+      return json<{ ingestToken: string }>(
+        await postJson(`/projects/${encodeURIComponent(key)}/rotate-token`, {})
+      )
     },
 
     async listProviders() {

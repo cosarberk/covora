@@ -4,6 +4,8 @@
  * Proje (review edilen birim) veri erişimi.
  */
 
+import { randomBytes } from 'node:crypto'
+
 import type { PrismaClient } from '@prisma/client'
 
 /**
@@ -48,4 +50,22 @@ export const listProjects = async (prisma: PrismaClient) =>
  */
 export const deleteProjectByKey = async (prisma: PrismaClient, key: string): Promise<void> => {
   await prisma.project.delete({ where: { key } })
+}
+
+/**
+ * Bir projenin ingest token'ını yeniden üretir (sızıntı/rotasyon için). Eski
+ * token derhal geçersiz olur; pipeline'ların yeni token ile güncellenmesi
+ * gerekir.
+ *
+ * @param prisma - Prisma client.
+ * @param key - Proje anahtarı.
+ * @returns Yeni ingest token.
+ */
+export const rotateIngestToken = async (
+  prisma: PrismaClient,
+  key: string
+): Promise<{ readonly ingestToken: string }> => {
+  const token = randomBytes(24).toString('base64url')
+  const project = await prisma.project.update({ where: { key }, data: { ingestToken: token } })
+  return { ingestToken: project.ingestToken }
 }

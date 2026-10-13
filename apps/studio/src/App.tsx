@@ -295,8 +295,10 @@ export const App = ({ api = defaultApi, initialUser, initialView }: AppProps = {
     if (tab === 'integration') {
       return (
         <IngestGuide
+          api={api}
           projectKey={selectedProject.key}
           ingestToken={selectedProject.ingestToken}
+          onRotated={() => void loadProjects()}
         />
       )
     }

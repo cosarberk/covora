@@ -21,6 +21,7 @@ import {
   createWebhook,
   deletePack,
   deleteProjectByKey,
+  rotateIngestToken,
   deleteProvider,
   deleteWebhook,
   ensureBuiltinPacks,
@@ -160,6 +161,7 @@ const start = async (): Promise<void> => {
         ingestToken: project.ingestToken
       })),
     deleteProject: (key) => deleteProjectByKey(prisma, key),
+    rotateIngestToken: (key) => rotateIngestToken(prisma, key),
     listRules: (projectId) => listManagementRules(prisma, projectId),
     listPacks: () => listPacks(prisma),
     listPacksByProject: (projectId) => listPacksByProject(prisma, projectId),

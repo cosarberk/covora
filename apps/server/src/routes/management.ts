@@ -120,6 +120,16 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
     return reply.status(204).send()
   })
 
+  app.post('/projects/:key/rotate-token', async (request, reply) => {
+    const { key } = request.params as { key: string }
+    const project = await deps.findProjectByKey(key)
+    if (project === null) {
+      return reply.status(404).send({ error: `Proje bulunamadı: ${key}` })
+    }
+    const result = await deps.rotateIngestToken(key)
+    return reply.send(result)
+  })
+
   app.get('/projects/:key/rules', async (request, reply) => {
     const { key } = request.params as { key: string }
     const project = await deps.findProjectByKey(key)
