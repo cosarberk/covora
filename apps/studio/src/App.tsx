@@ -1,10 +1,11 @@
 /**
  * @module studio/App
  *
- * Studio kök bileşeni — Blender tarzı dock editör kabuğu. Üstte menü/çalışma
- * alanı şeridi, solda araç rayı, merkezde viewport + altında konsol, sağda
- * dock (Gezgin + Özellikler). Tüm bölgeler sürüklenebilir ayraçlarla yeniden
- * boyutlanır. Ctrl/Cmd+K komut paleti.
+ * Studio kök bileşeni — dock editör kabuğu. Üstte logo + konum (breadcrumb) +
+ * komut paleti + kullanıcı; solda tek navigasyon rayı; merkezde viewport +
+ * altında konsol; sağda ekrana özel dock (navigator + inspector ya da bağlam
+ * paneli). Tüm bölgeler sürüklenebilir ayraçlarla yeniden boyutlanır.
+ * Ctrl/Cmd+K komut paleti.
  *
  * `api`/`initialUser` prop'ları önizleme/test içindir; üretimde varsayılan API
  * ve giriş akışı kullanılır.
@@ -88,6 +89,7 @@ export const App = ({
   const [copied, setCopied] = useState(false)
   const [cmdkOpen, setCmdkOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const [online, setOnline] = useState<boolean>(() => globalThis.navigator?.onLine ?? true)
 
   // Dock bölge boyutları (px) — sürüklenebilir.
   const [rightW, setRightW] = useState(300)
@@ -138,6 +140,18 @@ export const App = ({
     }
     globalThis.addEventListener('keydown', onKey)
     return () => globalThis.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Gerçek çevrimiçi/çevrimdışı durumu (statusbar göstergesi için).
+  useEffect(() => {
+    const goOnline = (): void => setOnline(true)
+    const goOffline = (): void => setOnline(false)
+    globalThis.addEventListener('online', goOnline)
+    globalThis.addEventListener('offline', goOffline)
+    return () => {
+      globalThis.removeEventListener('online', goOnline)
+      globalThis.removeEventListener('offline', goOffline)
+    }
   }, [])
 
   const loadProjectRules = useCallback(
@@ -657,7 +671,11 @@ export const App = ({
 
       {/* Durum çubuğu */}
       <footer className="statusbar">
-        <span className="statusbar__item statusbar__item--ok">● Bağlı</span>
+        <span
+          className={online ? 'statusbar__item statusbar__item--ok' : 'statusbar__item statusbar__item--fail'}
+        >
+          ● {online ? 'Bağlı' : 'Çevrimdışı'}
+        </span>
         <span className="statusbar__item">{projects.length} proje</span>
         <span className="statusbar__spacer" />
         <span className="statusbar__item statusbar__item--muted">{viewportTitle}</span>

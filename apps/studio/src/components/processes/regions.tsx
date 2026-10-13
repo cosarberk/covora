@@ -9,6 +9,7 @@ import type { ReviewKind } from '@covora/types'
 import { Background, Controls, MiniMap, Panel, ReactFlow, type Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
+import { confirmDialog } from '../overlays.js'
 import {
   LOG_COLOR,
   NODE_TYPES,
@@ -56,6 +57,7 @@ export const ProcessRunList = ({
         ))}
       </div>
     </div>
+    {proc.error !== null && <div className="state state--error runlist__err">{proc.error}</div>}
     <div className="runlist__rows">
       {proc.runs.length === 0 ? (
         <div className="tree__empty">Henüz pipeline yok.</div>
@@ -161,6 +163,26 @@ export const ProcessInspector = ({ proc }: { readonly proc: ProcessesState }): R
           <dt>Süre</dt>
           <dd>{formatDuration(run.startedAt, run.finishedAt) ?? '—'}</dd>
         </dl>
+        {(run.status === 'queued' || run.status === 'running') && (
+          <button
+            type="button"
+            className="btn-secondary btn-secondary--sm props__danger"
+            onClick={() => {
+              void confirmDialog({
+                title: 'Çalıştırmayı iptal et',
+                message: 'Bu pipeline durdurulacak. Devam eden adımlar tamamlanmaz.',
+                confirmLabel: 'İptal et',
+                danger: true
+              }).then((ok) => {
+                if (ok) {
+                  proc.cancel()
+                }
+              })
+            }}
+          >
+            Çalıştırmayı iptal et
+          </button>
+        )}
         <p className="props__desc">Grafikte bir node’a tıkla: girdi görseli, adım logları ya da kural raporu.</p>
       </div>
     )

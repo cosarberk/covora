@@ -2082,6 +2082,9 @@ input:focus-visible,
 .statusbar__item--ok {
   color: var(--pass);
 }
+.statusbar__item--fail {
+  color: var(--fail);
+}
 .statusbar__item--muted {
   color: var(--text-faint);
 }
@@ -3422,6 +3425,9 @@ input:focus-visible,
   flex-direction: column;
   gap: 7px;
   border-bottom: 1px solid var(--line);
+}
+.runlist__err {
+  margin: 8px;
 }
 .runlist__rows {
   flex: 1;

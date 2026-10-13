@@ -58,7 +58,7 @@ export const buildApp = (deps: AppDeps): FastifyInstance => {
       : trimmed.split(',').map((value) => value.trim())
   void app.register(cors, {
     origin,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['content-type', 'authorization', 'x-covora-token', 'x-covora-user']
   })
 

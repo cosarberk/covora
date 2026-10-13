@@ -13,18 +13,13 @@ export type IconName =
   | 'project'
   | 'search'
   | 'plus'
-  | 'close'
-  | 'chevron-left'
-  | 'chevron-right'
   | 'rules'
   | 'reviews'
   | 'webhook'
   | 'settings'
-  | 'refresh'
   | 'logout'
   | 'plug'
   | 'copy'
-  | 'play'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   dashboard: (
@@ -68,9 +63,6 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   plus: <path d="M12 5v14 M5 12h14" />,
-  close: <path d="M6 6 18 18 M18 6 6 18" />,
-  'chevron-left': <path d="m14 7-5 5 5 5" />,
-  'chevron-right': <path d="m10 7 5 5-5 5" />,
   rules: (
     <>
       <path d="M8 6h11 M8 12h11 M8 18h11" />
@@ -95,12 +87,6 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M12 2v3 M12 19v3 M2 12h3 M19 12h3 M5 5l2 2 M17 17l2 2 M19 5l-2 2 M7 17l-2 2" />
     </>
   ),
-  refresh: (
-    <>
-      <path d="M20 11a8 8 0 1 0-1 4" />
-      <path d="M20 5v6h-6" />
-    </>
-  ),
   logout: (
     <>
       <path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4" />
@@ -119,8 +105,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <rect x="9" y="9" width="11" height="11" rx="1.5" />
       <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
     </>
-  ),
-  play: <path d="M7 4.5v15l12-7.5Z" />
+  )
 }
 
 /** Tek renkli ikon. */

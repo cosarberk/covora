@@ -22,6 +22,7 @@ import type { NodeChange, XYPosition } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { RunInput, RunReport, StudioApi } from '../../api/client.js'
+import { toast } from '../overlays.js'
 import { COL_W, ROW_H, STATUS_STROKE, formatDuration, type Edge, type Node } from './graph.js'
 
 /** Seçili node: girdi, bir adım, bir kural ya da sonuç. */
@@ -511,7 +512,10 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     if (openRunId === null) {
       return
     }
-    void api.cancelRun(openRunId).catch(() => {})
+    void api
+      .cancelRun(openRunId)
+      .then(() => toast.info('Çalıştırma iptal ediliyor'))
+      .catch((cause) => toast.error(cause instanceof Error ? cause.message : 'İptal edilemedi'))
   }, [api, openRunId])
 
   return {

@@ -52,21 +52,6 @@ export const listProviders = async (prisma: PrismaClient): Promise<ProviderConfi
 }
 
 /**
- * Verilen review türü için aktif sağlayıcıyı getirir.
- *
- * @param prisma - Prisma client.
- * @param kind - Review türü.
- * @returns Aktif sağlayıcı ya da null.
- */
-export const getActiveProvider = async (
-  prisma: PrismaClient,
-  kind: ReviewKind
-): Promise<ProviderConfig | null> => {
-  const provider = await prisma.providerConfig.findFirst({ where: { kind, active: true } })
-  return provider === null ? null : toProviderConfig(provider)
-}
-
-/**
  * Verilen tür için aktif sağlayıcının çalışma-zamanı görünümünü (gizli API
  * anahtarı dahil) getirir. Yalnızca sunucu sağlayıcı fabrikası için.
  *
