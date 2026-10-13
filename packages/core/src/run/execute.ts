@@ -84,7 +84,19 @@ const toChecklistItem = (rule: Rule): ChecklistItem => ({
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
-/** Deterministik kuralları checker/client sonuçlarıyla çözer. */
+/** Bir sonucu okunur bir etikete çevirir (log için). */
+const outcomeLabel = (outcome: RuleResult['outcome']): string =>
+  outcome === 'pass' ? 'GEÇTİ' : outcome === 'partial' ? 'KISMİ' : 'KALDI'
+
+/** Bir sonucun log seviyesini belirler: pass→info, partial→warn, fail→warn. */
+const outcomeLevel = (outcome: RuleResult['outcome']): 'info' | 'warn' =>
+  outcome === 'pass' ? 'info' : 'warn'
+
+/**
+ * Deterministik kuralları checker/client sonuçlarıyla çözer. Her kuralın hangi
+ * yöntemle (checker / client / tanımsız) ve ne kadar sürede çözüldüğünü, sonucu
+ * ve gerekçesini tek tek loglar.
+ */
 const resolveDeterministic = async (
   rules: readonly Rule[],
   input: ReviewInput,
@@ -103,31 +115,41 @@ const resolveDeterministic = async (
     rules.map(
       async (
         rule
-      ): Promise<{ result: RuleResult; level: 'info' | 'warn'; message: string }> => {
+      ): Promise<{
+        readonly rule: Rule
+        readonly result: RuleResult
+        readonly method: string
+        readonly ms: number
+      }> => {
+        const startedAt = Date.now()
         const checker = checkers[rule.id]
         if (checker !== undefined) {
           const result = await checker(rule, input)
-          return { result, level: 'info', message: `${rule.id}: ${result.outcome}` }
+          return { rule, result, method: 'checker', ms: Date.now() - startedAt }
         }
         const clientResult = clientResultsById.get(rule.id)
         if (clientResult !== undefined) {
-          return {
-            result: clientResult,
-            level: 'info',
-            message: `${rule.id}: ${clientResult.outcome} (client)`
-          }
+          return { rule, result: clientResult, method: 'client (DOM)', ms: Date.now() - startedAt }
         }
         return {
-          result: { ruleId: rule.id, outcome: 'fail', note: 'Deterministik kontrol tanımlı değil' },
-          level: 'warn',
-          message: `${rule.id}: checker tanımlı değil → fail`
+          rule,
+          result: { ruleId: rule.id, outcome: 'fail', note: 'Deterministik checker tanımlı değil' },
+          method: 'tanımsız',
+          ms: Date.now() - startedAt
         }
       }
     )
   )
 
   for (const entry of resolved) {
-    await sink.log(entry.level, entry.message, 'deterministic')
+    const { rule, result, method, ms } = entry
+    await sink.log('debug', `↳ ${rule.title} · yöntem: ${method}`, 'deterministic')
+    const reason = result.note !== undefined && result.note.length > 0 ? ` · ${result.note}` : ''
+    await sink.log(
+      outcomeLevel(result.outcome),
+      `${rule.title}: ${outcomeLabel(result.outcome)}${reason} (${ms} ms)`,
+      'deterministic'
+    )
   }
   return resolved.map((entry) => entry.result)
 }
@@ -144,18 +166,53 @@ const resolveLlm = async (
   sink: RunSink
 ): Promise<{ readonly results: RuleResult[]; readonly degraded: boolean }> => {
   if (rules.length === 0) {
-    await sink.log('info', 'Bu türde LLM kuralı yok; adım atlandı', 'llm')
+    await sink.log('info', 'Bu türde AI kuralı yok; adım atlandı', 'llm')
     return { results: [], degraded: false }
   }
 
-  await sink.log('info', `${rules.length} LLM kuralı AI'ya gönderiliyor…`, 'llm')
+  const ruleById = new Map(rules.map((rule) => [rule.id, rule]))
+  const inputSummary =
+    input.kind === 'ui'
+      ? `ekran görüntüsü (~${Math.round((input.screenshot.length * 3) / 4 / 1024)} KB)`
+      : `${input.files.length} kaynak dosya`
+  await sink.log(
+    'info',
+    `${rules.length} AI kuralı '${provider.kind}' sağlayıcısına checklist olarak gönderiliyor · girdi: ${inputSummary}`,
+    'llm'
+  )
+  for (const rule of rules) {
+    await sink.log('debug', `↳ soru: "${rule.title}" — ${rule.description || 'açıklama yok'}`, 'llm')
+  }
+
+  const startedAt = Date.now()
   try {
     const results = await provider.fillChecklist(input, rules.map(toChecklistItem))
-    await sink.log('info', `AI ${results.length} sonuç döndürdü`, 'llm')
+    const ms = Date.now() - startedAt
+    await sink.log('info', `AI yanıt verdi: ${results.length} sonuç (${(ms / 1000).toFixed(1)} sn)`, 'llm')
+    for (const result of results) {
+      const rule = ruleById.get(result.ruleId)
+      const label = rule?.title ?? result.ruleId
+      const reason = result.note !== undefined && result.note.length > 0 ? ` · ${result.note}` : ''
+      await sink.log(
+        outcomeLevel(result.outcome),
+        `${label}: ${outcomeLabel(result.outcome)}${reason}`,
+        'llm'
+      )
+    }
     return { results: [...results], degraded: false }
   } catch (error) {
     const message = errorMessage(error)
-    await sink.log('error', `AI değerlendirmesi başarısız: ${message}`, 'llm')
+    const ms = Date.now() - startedAt
+    await sink.log(
+      'error',
+      `AI değerlendirmesi başarısız (${(ms / 1000).toFixed(1)} sn): ${message}`,
+      'llm'
+    )
+    await sink.log(
+      'warn',
+      `Dayanıklılık: ${rules.length} AI kuralı 'KALDI' sayılıyor, run 'degraded' olarak sürüyor`,
+      'llm'
+    )
     const results = rules.map(
       (rule): RuleResult => ({
         ruleId: rule.id,
@@ -188,11 +245,29 @@ export const executeReviewRun = async (
 
   // 1) ingest
   await sink.stepStarted('ingest')
+  const inputDesc =
+    input.kind === 'ui'
+      ? `UI review · ekran görüntüsü (~${Math.round((input.screenshot.length * 3) / 4 / 1024)} KB)${
+          input.clientResults !== undefined ? ` · ${input.clientResults.length} client (DOM) sonucu` : ''
+        }`
+      : `Code review · ${input.files.length} dosya`
+  await sink.log('info', inputDesc, 'ingest')
   await sink.log(
     'info',
-    `${kind} review · ${relevantRules.length} kural (${deterministicRules.length} deterministik, ${llmRules.length} AI)`,
+    `${relevantRules.length} kural değerlendirilecek — ${deterministicRules.length} deterministik, ${llmRules.length} AI-yargı`,
     'ingest'
   )
+  const totalWeightAll = relevantRules.reduce((sum, rule) => sum + rule.weight, 0)
+  for (const rule of relevantRules) {
+    await sink.log(
+      'debug',
+      `• ${rule.title} [${rule.evaluation === 'llm' ? 'AI' : 'deterministik'}] · ağırlık ${rule.weight}${
+        rule.severity === 'blocker' ? ' · BLOCKER' : ` · ${rule.severity}`
+      }`,
+      'ingest'
+    )
+  }
+  await sink.log('info', `Toplam ağırlık: ${totalWeightAll}`, 'ingest')
   if (relevantRules.length === 0) {
     await sink.log(
       'warn',
@@ -233,9 +308,34 @@ export const executeReviewRun = async (
   const coverage = computeCoverage(relevantRules, results, config)
   await sink.log(
     'info',
-    `Coverage ${coverage.score.toFixed(1)} · seviye ${coverage.level}`,
+    `Formül: skor = (kazanılan ağırlık / toplam ağırlık) × 100 · kısmi kredi = ${config.partialCredit}`,
     'coverage'
   )
+  const ruleWeightById = new Map(relevantRules.map((rule) => [rule.id, rule]))
+  for (const rr of coverage.ruleResults) {
+    const rule = ruleWeightById.get(rr.ruleId)
+    if (rule === undefined) {
+      continue
+    }
+    const credit = rr.outcome === 'pass' ? 1 : rr.outcome === 'partial' ? config.partialCredit : 0
+    await sink.log(
+      'debug',
+      `• ${rule.title}: ${outcomeLabel(rr.outcome)} → ${credit} × ${rule.weight} = ${(credit * rule.weight).toFixed(2)} puan`,
+      'coverage'
+    )
+  }
+  await sink.log(
+    'info',
+    `Kazanılan ${coverage.earnedWeight.toFixed(2)} / Toplam ${coverage.totalWeight.toFixed(2)} → Skor ${coverage.score.toFixed(1)} · seviye ${coverage.level}`,
+    'coverage'
+  )
+  if (coverage.failedBlockers.length > 0) {
+    await sink.log(
+      'warn',
+      `Uyumsuz blocker kural(lar): ${coverage.failedBlockers.join(', ')}`,
+      'coverage'
+    )
+  }
   await sink.stepFinished('coverage', 'succeeded')
 
   // 5) gate (+ regresyon)
@@ -247,6 +347,36 @@ export const executeReviewRun = async (
       : rawGate
   const delta = previousScore === null ? null : coverage.score - previousScore
   const regressed = delta !== null && delta <= -policy.regressionThreshold
+
+  // Gate kararını oluşturan her kontrolü tek tek logla.
+  const scoreOk = coverage.score >= policy.minScore
+  await sink.log(
+    scoreOk ? 'info' : 'warn',
+    `1/3 Asgari skor eşiği: ${coverage.score.toFixed(1)} ${scoreOk ? '≥' : '<'} ${policy.minScore} → ${scoreOk ? 'geçti' : 'KALDI'}`,
+    'gate'
+  )
+  if (policy.blockOnFailedBlockers) {
+    const blockersOk = coverage.failedBlockers.length === 0
+    await sink.log(
+      blockersOk ? 'info' : 'warn',
+      `2/3 Blocker kontrolü: ${blockersOk ? 'tüm blocker kurallar uyumlu' : `uyumsuz → ${coverage.failedBlockers.join(', ')}`} → ${blockersOk ? 'geçti' : 'KALDI'}`,
+      'gate'
+    )
+  } else {
+    await sink.log('debug', '2/3 Blocker kontrolü politikada kapalı → atlandı', 'gate')
+  }
+  if (delta === null) {
+    await sink.log('debug', '3/3 Regresyon kontrolü: ilk run, karşılaştırılacak önceki skor yok → atlandı', 'gate')
+  } else if (!policy.blockOnRegression) {
+    await sink.log('debug', `3/3 Regresyon kontrolü politikada kapalı · delta ${delta.toFixed(1)} → atlandı`, 'gate')
+  } else {
+    await sink.log(
+      regressed ? 'warn' : 'info',
+      `3/3 Regresyon kontrolü: delta ${delta.toFixed(1)} puan (eşik -${policy.regressionThreshold}) → ${regressed ? 'KALDI' : 'geçti'}`,
+      'gate'
+    )
+  }
+
   const gate =
     regressed && policy.blockOnRegression
       ? {
@@ -257,7 +387,11 @@ export const executeReviewRun = async (
           ]
         }
       : baseGate
-  await sink.log('info', gate.passed ? 'Gate: GEÇTİ' : `Gate: KALDI — ${gate.reasons.join('; ')}`, 'gate')
+  await sink.log(
+    gate.passed ? 'info' : 'warn',
+    gate.passed ? 'Gate kararı: GEÇTİ — merge serbest' : `Gate kararı: KALDI — ${gate.reasons.join('; ')}`,
+    'gate'
+  )
   await sink.stepFinished('gate', 'succeeded')
 
   const outcome: ReviewOutcome = { coverage, gate }
@@ -267,7 +401,18 @@ export const executeReviewRun = async (
   let reviewId: string
   try {
     reviewId = await deps.persistReview(outcome, delta)
-    await sink.log('info', `Review kaydedildi: ${reviewId}`, 'persist')
+    await sink.log(
+      'info',
+      `Review kaydedildi: ${reviewId} · ${results.length} kural sonucu, skor ${coverage.score.toFixed(1)}, gate ${gate.passed ? 'GEÇTİ' : 'KALDI'}`,
+      'persist'
+    )
+    if (delta !== null) {
+      await sink.log(
+        'info',
+        `Önceki aynı tür review'a göre skor farkı: ${delta >= 0 ? '+' : ''}${delta.toFixed(1)} puan`,
+        'persist'
+      )
+    }
     await sink.stepFinished('persist', 'succeeded')
   } catch (error) {
     const message = errorMessage(error)
@@ -280,7 +425,16 @@ export const executeReviewRun = async (
   // 7) notify (ateşle-unut)
   await sink.stepStarted('notify')
   try {
-    deps.notify?.({ outcome, reviewId, delta, regressed })
+    if (deps.notify === undefined) {
+      await sink.log('debug', 'Bildirim tetikleyici tanımlı değil; adım boş geçildi', 'notify')
+    } else {
+      await sink.log(
+        'info',
+        `Bildirim tetikleniyor${regressed ? ' · REGRESYON işaretli' : ''} (abone webhook'lara ateşle-unut)`,
+        'notify'
+      )
+      deps.notify({ outcome, reviewId, delta, regressed })
+    }
     await sink.stepFinished('notify', 'succeeded')
   } catch (error) {
     // Bildirim hatası run'ı etkilemez.
@@ -289,6 +443,11 @@ export const executeReviewRun = async (
   }
 
   const status: RunStatus = llm.degraded ? 'degraded' : 'succeeded'
+  await sink.log(
+    status === 'degraded' ? 'warn' : 'info',
+    `Pipeline tamamlandı — durum: ${status === 'degraded' ? 'KISMİ (AI adımı başarısız, deterministik sonuç üretildi)' : 'BAŞARILI'} · skor ${coverage.score.toFixed(1)} · gate ${gate.passed ? 'GEÇTİ' : 'KALDI'}`,
+    'notify'
+  )
   await sink.runFinished(status, { delta })
 
   return { status, outcome, reviewId, delta }
