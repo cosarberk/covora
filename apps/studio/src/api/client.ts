@@ -70,6 +70,13 @@ export interface RunInput {
   readonly input: ReviewInput
 }
 
+/** Bir webhook test gönderiminin sonucu. */
+export interface WebhookTestResult {
+  readonly ok: boolean
+  readonly status?: number
+  readonly error?: string
+}
+
 /** Bir run'ın ürettiği review'ın raporu (kural sonuçları + tam döküm). */
 export interface RunReport {
   readonly reviewId: string
@@ -196,6 +203,8 @@ export interface StudioApi {
   createWebhook(projectKey: string, input: CreateWebhookInput): Promise<Webhook>
   setWebhookActive(id: string, active: boolean): Promise<void>
   deleteWebhook(id: string): Promise<void>
+  /** Bir webhook'a örnek yük gönderir; ulaşılabilirlik/durum sonucunu döner. */
+  testWebhook(id: string): Promise<WebhookTestResult>
   getProjectConfig(projectKey: string): Promise<ProjectConfig>
   updateProjectConfig(projectKey: string, input: ProjectConfigInput): Promise<ProjectConfig>
 }
@@ -521,6 +530,12 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
 
     async deleteWebhook(id) {
       ok(await authFetch(`/webhooks/${encodeURIComponent(id)}`, { method: 'DELETE' }))
+    },
+
+    async testWebhook(id) {
+      return json<WebhookTestResult>(
+        await postJson(`/webhooks/${encodeURIComponent(id)}/test`, {})
+      )
     },
 
     async getProjectConfig(projectKey) {

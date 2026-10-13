@@ -14,6 +14,7 @@ import {
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
+import { sendTestWebhook } from '../services/notifications.js'
 import type { ManagementDeps, RulePatch } from '../services/management.js'
 
 const upsertProjectBodySchema = z.object({
@@ -328,6 +329,16 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
     const { id } = request.params as { id: string }
     await deps.deleteWebhook(id)
     return reply.status(204).send()
+  })
+
+  app.post('/webhooks/:id/test', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const webhook = await deps.getWebhook(id)
+    if (webhook === null) {
+      return reply.status(404).send({ error: 'Webhook bulunamadı' })
+    }
+    const result = await sendTestWebhook(webhook.url)
+    return reply.send(result)
   })
 
   app.get('/providers', async () => ({ providers: await deps.listProviders() }))

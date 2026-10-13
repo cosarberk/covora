@@ -119,6 +119,8 @@ export interface ManagementDeps {
   readonly getDashboard: () => Promise<DashboardSummary>
   /** Projenin bildirim webhook'larını listeler. */
   readonly listWebhooks: (projectId: string) => Promise<readonly Webhook[]>
+  /** Bir webhook'u kimliğine göre getirir (test gönderimi için). */
+  readonly getWebhook: (id: string) => Promise<{ readonly url: string } | null>
   /** Yeni webhook oluşturur. */
   readonly createWebhook: (data: CreateWebhookData) => Promise<Webhook>
   /** Bir webhook'un etkinlik durumunu değiştirir. */

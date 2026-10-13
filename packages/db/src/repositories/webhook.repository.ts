@@ -50,6 +50,21 @@ export const listActiveWebhooks = async (
   prisma.webhook.findMany({ where: { projectId, active: true } })
 
 /**
+ * Bir webhook'u kimliğine göre getirir.
+ *
+ * @param prisma - Prisma client.
+ * @param id - Webhook kimliği.
+ * @returns Webhook ya da null.
+ */
+export const findWebhookById = async (
+  prisma: PrismaClient,
+  id: string
+): Promise<Webhook | null> => {
+  const row = await prisma.webhook.findUnique({ where: { id } })
+  return row === null ? null : toWebhook(row)
+}
+
+/**
  * Yeni webhook oluşturur.
  *
  * @param prisma - Prisma client.

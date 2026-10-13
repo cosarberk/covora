@@ -3738,3 +3738,16 @@ input:focus-visible,
   color: var(--fail);
   text-decoration: underline;
 }
+
+/* ---- Webhook test aksiyonları ---- */
+.webhook-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.webhook-test-result {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}

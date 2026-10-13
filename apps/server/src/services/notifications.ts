@@ -92,6 +92,49 @@ const post = async (url: string, body: unknown): Promise<void> => {
   }
 }
 
+/** Bir test gönderiminin sonucu (UI'ya geri bildirilir). */
+export interface WebhookTestResult {
+  /** İstek 2xx döndüyse true. */
+  readonly ok: boolean
+  /** Dönen HTTP durum kodu (ulaşıldıysa). */
+  readonly status?: number
+  /** Ulaşılamadıysa/zaman aşımında hata özeti. */
+  readonly error?: string
+}
+
+/**
+ * Bir webhook URL'ine örnek (test) yük gönderir ve — dağıtımın aksine — gerçek
+ * sonucu döndürür. Studio'daki "Test" butonu bunu kullanır.
+ *
+ * @param url - Hedef URL.
+ * @returns Ulaşılabilirlik ve durum kodu.
+ */
+export const sendTestWebhook = async (url: string): Promise<WebhookTestResult> => {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  const summary = '[Covora] Test bildirimi — webhook yapılandırması çalışıyor.'
+  const body = {
+    text: summary,
+    content: summary,
+    event: 'test',
+    test: true,
+    timestamp: new Date().toISOString()
+  }
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    })
+    return { ok: response.ok, status: response.status }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /**
  * Bir review bildirimini eşleşen etkin webhook'lara dağıtır.
  *

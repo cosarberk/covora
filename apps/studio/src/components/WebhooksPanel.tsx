@@ -39,6 +39,8 @@ export const WebhooksPanel = ({ api, projectKey }: WebhooksPanelProps): React.JS
   const [url, setUrl] = useState('')
   const [events, setEvents] = useState<readonly WebhookEvent[]>(emptyForm.events)
   const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState<string | null>(null)
+  const [testResult, setTestResult] = useState<Record<string, string>>({})
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -88,6 +90,31 @@ export const WebhooksPanel = ({ api, projectKey }: WebhooksPanelProps): React.JS
       await load()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Bilinmeyen hata')
+    }
+  }
+
+  const test = async (id: string): Promise<void> => {
+    setTesting(id)
+    setTestResult((current) => {
+      const next = { ...current }
+      delete next[id]
+      return next
+    })
+    try {
+      const result = await api.testWebhook(id)
+      const message = result.ok
+        ? `Ulaştı · HTTP ${result.status ?? '2xx'}`
+        : result.status !== undefined
+          ? `Hedef reddetti · HTTP ${result.status}`
+          : `Ulaşılamadı · ${result.error ?? 'hata'}`
+      setTestResult((current) => ({ ...current, [id]: message }))
+    } catch (cause) {
+      setTestResult((current) => ({
+        ...current,
+        [id]: cause instanceof Error ? cause.message : 'Test başarısız'
+      }))
+    } finally {
+      setTesting(null)
     }
   }
 
@@ -163,10 +190,25 @@ export const WebhooksPanel = ({ api, projectKey }: WebhooksPanelProps): React.JS
                     {webhook.active ? 'Etkin' : 'Kapalı'}
                   </button>
                 </td>
-                <td>
-                  <button type="button" className="link-button" onClick={() => void remove(webhook.id)}>
+                <td className="webhook-actions">
+                  <button
+                    type="button"
+                    className="link-button"
+                    disabled={testing === webhook.id}
+                    onClick={() => void test(webhook.id)}
+                  >
+                    {testing === webhook.id ? 'Test…' : 'Test'}
+                  </button>
+                  <button
+                    type="button"
+                    className="link-button link-button--danger"
+                    onClick={() => void remove(webhook.id)}
+                  >
                     Sil
                   </button>
+                  {testResult[webhook.id] !== undefined && (
+                    <span className="webhook-test-result">{testResult[webhook.id]}</span>
+                  )}
                 </td>
               </tr>
             ))}
