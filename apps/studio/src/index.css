@@ -3661,3 +3661,71 @@ input:focus-visible,
   display: flex;
   gap: 8px;
 }
+
+/* ---- Gate simülasyonu ---- */
+.sim__intro {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+.sim {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .sim {
+    grid-template-columns: 1fr;
+  }
+}
+.sim__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sim__controls input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.sim__verdict {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  background: var(--surface-2);
+}
+.sim__verdict--pass {
+  border-color: rgba(76, 194, 103, 0.5);
+  background: rgba(76, 194, 103, 0.06);
+}
+.sim__verdict--fail {
+  border-color: rgba(242, 109, 109, 0.5);
+  background: rgba(242, 109, 109, 0.06);
+}
+.sim__decision {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.sim__verdict--pass .sim__decision {
+  color: var(--pass);
+}
+.sim__verdict--fail .sim__decision {
+  color: var(--fail);
+}
+.sim__level {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+.sim__reasons {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+.sim__ok {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--pass);
+}

@@ -38,6 +38,11 @@ export const SettingsPanel = ({ api, projectKey }: SettingsPanelProps): React.JS
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
+  // Canlı gate simülasyonu girdileri.
+  const [simScore, setSimScore] = useState(75)
+  const [simBlocker, setSimBlocker] = useState(false)
+  const [simRegressed, setSimRegressed] = useState(false)
+
   const load = useCallback(async (): Promise<void> => {
     setLoading(true)
     setError(null)
@@ -104,6 +109,26 @@ export const SettingsPanel = ({ api, projectKey }: SettingsPanelProps): React.JS
   if (loading) {
     return <div className="state">Yükleniyor…</div>
   }
+
+  // --- Canlı simülasyon (motorla aynı mantık) ---
+  const sortedLevels = [...levels]
+    .filter((level) => level.id.trim().length > 0)
+    .sort((a, b) => b.minScore - a.minScore)
+  const simLevel =
+    sortedLevels.find((level) => simScore >= level.minScore)?.id ??
+    sortedLevels[sortedLevels.length - 1]?.id ??
+    '—'
+  const simReasons: string[] = []
+  if (simScore < gateMinScore) {
+    simReasons.push(`Coverage skoru (${simScore.toFixed(1)}) asgari eşiğin (${gateMinScore}) altında`)
+  }
+  if (blockOnFailedBlockers && simBlocker) {
+    simReasons.push('Uyumsuz blocker kural(lar) var')
+  }
+  if (blockOnRegression && simRegressed) {
+    simReasons.push(`Coverage regresyonu (eşik ${regressionThreshold} puan)`)
+  }
+  const simPassed = simReasons.length === 0
 
   return (
     <form className="settings" onSubmit={(event) => void save(event)}>
@@ -200,6 +225,57 @@ export const SettingsPanel = ({ api, projectKey }: SettingsPanelProps): React.JS
             Önceki review'a göre bu kadar puan düşüş regresyon sayılır.
           </span>
         </label>
+      </fieldset>
+
+      <fieldset className="settings__group">
+        <legend>Canlı simülasyon</legend>
+        <p className="field__hint sim__intro">
+          Yukarıdaki politikayı değiştir, aşağıdaki varsayımsal review ile sonucu anında gör
+          (motorla birebir aynı mantık).
+        </p>
+        <div className="sim">
+          <div className="sim__controls">
+            <label className="field">
+              <span className="field__label">Varsayımsal coverage skoru: {simScore}</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={simScore}
+                onChange={(event) => setSimScore(Number(event.target.value))}
+              />
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={simBlocker}
+                onChange={(event) => setSimBlocker(event.target.checked)}
+              />
+              Uyumsuz (fail) bir blocker kural var
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={simRegressed}
+                onChange={(event) => setSimRegressed(event.target.checked)}
+              />
+              Önceki review'a göre eşik üstü regresyon var
+            </label>
+          </div>
+          <div className={`sim__verdict ${simPassed ? 'sim__verdict--pass' : 'sim__verdict--fail'}`}>
+            <div className="sim__decision">{simPassed ? 'Gate GEÇER' : 'Gate KALIR'}</div>
+            <div className="sim__level">Seviye: {simLevel}</div>
+            {simReasons.length > 0 ? (
+              <ul className="sim__reasons">
+                {simReasons.map((reason, index) => (
+                  <li key={index}>{reason}</li>
+                ))}
+              </ul>
+            ) : (
+              <div className="sim__ok">Tüm gate kontrolleri geçiyor — merge serbest.</div>
+            )}
+          </div>
+        </div>
       </fieldset>
 
       <div className="settings__actions">
