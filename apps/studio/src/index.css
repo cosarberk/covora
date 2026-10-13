@@ -1243,11 +1243,47 @@ img {
 }
 .fnode--running {
   border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 18px -3px var(--accent);
+  animation: neon-pulse 1.5s ease-in-out infinite;
 }
 .fnode--running .fnode__icon {
   background: var(--accent-soft);
   color: var(--accent-hover);
   animation: pulse 1.3s ease-in-out infinite;
+}
+@keyframes neon-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px var(--accent),
+      0 0 12px -4px var(--accent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px var(--accent-hover),
+      0 0 28px 0 var(--accent);
+  }
+}
+.fnode__detail {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.fnode__spin {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .fnode--succeeded {
   border-color: rgba(76, 194, 103, 0.5);
@@ -1304,6 +1340,113 @@ img {
 .fnode__sub {
   font-size: 11px;
   color: var(--text-faint);
+}
+
+/* ---- Kural node'ları ---- */
+.fnode--rule {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 186px;
+  padding: 8px 11px;
+}
+.fnode__rtop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.fnode__tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.fnode__tag--llm {
+  background: rgba(124, 140, 248, 0.16);
+  color: var(--accent-hover);
+}
+.fnode__tag--deterministic {
+  background: var(--surface-3);
+  color: var(--text-dim);
+}
+.fnode__blocker {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--fail);
+  border: 1px solid rgba(242, 109, 109, 0.4);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.fnode__weight {
+  font-size: 10px;
+  color: var(--text-faint);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.fnode__rstatus {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.fnode--rule-idle {
+  opacity: 0.82;
+}
+.fnode--rule-pass {
+  border-color: rgba(76, 194, 103, 0.55);
+}
+.fnode--rule-pass .fnode__rstatus {
+  color: var(--pass);
+}
+.fnode--rule-partial {
+  border-color: rgba(216, 161, 20, 0.55);
+}
+.fnode--rule-partial .fnode__rstatus {
+  color: var(--warn);
+}
+.fnode--rule-fail {
+  border-color: rgba(242, 109, 109, 0.55);
+}
+.fnode--rule-fail .fnode__rstatus {
+  color: var(--fail);
+}
+
+/* ---- Kenar akış animasyonu (neon) ---- */
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: 6 4;
+  animation: flow-dash 0.55s linear infinite;
+  filter: drop-shadow(0 0 4px var(--accent));
+}
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+/* ---- Grafik üst panel (düzen sıfırla) ---- */
+.flow-panel__btn {
+  font-size: 11px;
+  padding: 5px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.flow-panel__btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* ---- Kural açıklaması (inspector) ---- */
+.rule-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin: 0;
+  white-space: pre-wrap;
 }
 
 /* ---- Sağ: detay paneli ---- */

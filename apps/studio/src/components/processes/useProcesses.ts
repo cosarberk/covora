@@ -3,30 +3,38 @@
  *
  * Süreçler görünümünün tüm durumunu yöneten hook. Efektler `enabled` ile
  * kapılıdır (görünüm aktif değilken ağ/akış yok). Run listesini yoklar, seçili
- * run'ı SSE ile canlı izler, girdiyi ve raporu getirir ve React Flow için
- * node/edge türetir. Kabuğun bölgeleri (Gezgin, viewport, Özellikler, Konsol)
- * bu hook'un döndürdüklerini tüketir.
+ * run'ı SSE ile canlı izler, girdiyi/raporu ve o projenin kurallarını getirir;
+ * React Flow için **kural başına** node + dinamik düzen türetir. Çalışan
+ * adımlar için canlı süre sayacı tutar ve kullanıcının sürüklediği node
+ * konumlarını hatırlar. Kabuğun bölgeleri (Gezgin, viewport, Özellikler,
+ * Konsol) bu hook'un döndürdüklerini tüketir.
  */
 
 import type {
+  ManagementRule,
   ReviewKind,
   ReviewRun,
   RunLogLine,
   RunStep,
   RunSummary
 } from '@covora/types'
+import type { NodeChange, XYPosition } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { RunInput, RunReport, StudioApi } from '../../api/client.js'
-import { FLOW_EDGES, LAYOUT, STATUS_STROKE, type Edge, type Node } from './graph.js'
+import { COL_W, ROW_H, STATUS_STROKE, formatDuration, type Edge, type Node } from './graph.js'
 
-/** Seçili node: girdi, bir adım ya da sonuç. */
+/** Seçili node: girdi, bir adım, bir kural ya da sonuç. */
 export type SelectedNode =
   | { readonly kind: 'input' }
   | { readonly kind: 'result' }
   | { readonly kind: 'step'; readonly key: string }
+  | { readonly kind: 'rule'; readonly key: string }
 
 const TERMINAL: readonly ReviewRun['status'][] = ['succeeded', 'degraded', 'failed', 'cancelled']
+
+/** Kural node id'si (step anahtarlarıyla çakışmasın diye önekli). */
+const ruleNodeId = (key: string): string => `rule:${key}`
 
 /** {@link useProcesses} dönüşü. */
 export interface ProcessesState {
@@ -41,12 +49,15 @@ export interface ProcessesState {
   readonly logs: readonly RunLogLine[]
   readonly input: RunInput | null
   readonly report: RunReport | null
+  readonly rules: readonly ManagementRule[]
   readonly thumb: string | null
   readonly selected: SelectedNode | null
   readonly selectNode: (id: string) => void
   readonly clearSelection: () => void
   readonly nodes: Node[]
   readonly edges: Edge[]
+  readonly onNodesChange: (changes: readonly NodeChange[]) => void
+  readonly resetLayout: () => void
   readonly stepByKey: Map<string, RunStep>
   readonly cancel: () => void
   readonly error: string | null
@@ -62,7 +73,10 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
   const [logs, setLogs] = useState<RunLogLine[]>([])
   const [input, setInput] = useState<RunInput | null>(null)
   const [report, setReport] = useState<RunReport | null>(null)
+  const [rules, setRules] = useState<readonly ManagementRule[]>([])
   const [selected, setSelected] = useState<SelectedNode | null>(null)
+  const [positions, setPositions] = useState<Record<string, XYPosition>>({})
+  const [tick, setTick] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   // Run listesi + hafif yoklama.
@@ -102,7 +116,9 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     setLogs([])
     setInput(null)
     setReport(null)
+    setRules([])
     setSelected(null)
+    setPositions({})
 
     const unsubscribe = api.streamRun(openRunId, (event) => {
       if (!active) {
@@ -158,11 +174,44 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     }
   }, [api, enabled, openRunId])
 
+  // Açık run'ın projesi + türü (özetten; run yüklenmeden de bilinir).
+  const openSummary = useMemo(
+    () => runs.find((item) => item.id === openRunId) ?? null,
+    [runs, openRunId]
+  )
+  const projectKey = run?.projectKey ?? openSummary?.projectKey ?? null
+  const runKind = run?.kind ?? openSummary?.kind ?? null
+
+  // O projenin kuralları (kural başına node için). Türe göre süzülür.
+  useEffect(() => {
+    if (!enabled || projectKey === null) {
+      return
+    }
+    let active = true
+    api
+      .listRules(projectKey)
+      .then((list) => {
+        if (active) {
+          setRules(list)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [api, enabled, projectKey])
+
   // Rapor (terminal + reviewId).
   const status = run?.status
   const reviewId = run?.reviewId
   useEffect(() => {
-    if (!enabled || openRunId === null || status === undefined || !TERMINAL.includes(status) || reviewId === undefined) {
+    if (
+      !enabled ||
+      openRunId === null ||
+      status === undefined ||
+      !TERMINAL.includes(status) ||
+      reviewId === undefined
+    ) {
       return
     }
     let active = true
@@ -178,6 +227,15 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
       active = false
     }
   }, [api, enabled, openRunId, status, reviewId])
+
+  // Canlı süre sayacı: run terminal değilken saniyede bir tetikle.
+  useEffect(() => {
+    if (!enabled || run === null || TERMINAL.includes(run.status)) {
+      return
+    }
+    const timer = setInterval(() => setTick((n) => n + 1), 1000)
+    return () => clearInterval(timer)
+  }, [enabled, run])
 
   const visibleRuns = useMemo(
     () => (kindFilter === '' ? runs : runs.filter((item) => item.kind === kindFilter)),
@@ -200,69 +258,214 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     [input]
   )
 
+  // Bu run'ın türüne ait kurallar, değerlendirme tipine göre ayrılmış.
+  const relevantRules = useMemo(
+    () => (runKind === null ? [] : rules.filter((rule) => rule.kind === runKind)),
+    [rules, runKind]
+  )
+  const detRules = useMemo(
+    () => relevantRules.filter((rule) => rule.evaluation === 'deterministic'),
+    [relevantRules]
+  )
+  const llmRules = useMemo(
+    () => relevantRules.filter((rule) => rule.evaluation === 'llm'),
+    [relevantRules]
+  )
+
+  // Rapor sonuçları kural anahtarına göre (motor rule.key'i ruleId olarak yazar).
+  const outcomeByKey = useMemo(() => {
+    const map = new Map<string, RunReport['results'][number]['outcome']>()
+    for (const result of report?.results ?? []) {
+      map.set(result.ruleId, result.outcome)
+    }
+    return map
+  }, [report])
+
+  // Node'lar: input → ingest → (det/llm adımları + kural node'ları) → coverage
+  // → gate → persist → notify → result. Dinamik düzen; sürükleme konumları
+  // `positions` ile override edilir.
   const nodes = useMemo<Node[]>(() => {
     if (run === null) {
       return []
     }
-    return [
-      {
-        id: 'input',
-        type: 'input',
-        position: LAYOUT.input ?? { x: 0, y: 150 },
-        data: {
-          kind: run.kind,
-          thumb,
-          fileCount: input !== null && input.input.kind === 'code' ? input.input.files.length : null,
-          selected: selected?.kind === 'input'
-        },
-        draggable: false
-      },
-      ...run.steps.map(
-        (step): Node => ({
-          id: step.key,
-          type: 'step',
-          position: LAYOUT[step.key] ?? { x: 0, y: 0 },
-          data: {
-            name: step.name,
-            status: step.status,
-            selected: selected?.kind === 'step' && selected.key === step.key
-          },
-          draggable: false
-        })
-      ),
-      {
-        id: 'result',
-        type: 'result',
-        position: LAYOUT.result ?? { x: 1650, y: 150 },
-        data: {
-          score: run.score ?? null,
-          level: run.level ?? null,
-          gatePassed: run.gatePassed ?? null,
-          selected: selected?.kind === 'result'
-        },
-        draggable: false
-      }
-    ]
-  }, [run, input, thumb, selected])
+    // `tick` bağımlılık olarak çalışan adımların canlı süresini yeniden
+    // hesaplatır (formatDuration içeride Date.now() kullanır).
+    const R = detRules.length
+    const L = llmRules.length
+    const groupGap = R > 0 && L > 0 ? 56 : 0
+    const detY = detRules.map((_, i) => i * ROW_H)
+    const llmBase = R * ROW_H + groupGap
+    const llmY = llmRules.map((_, j) => llmBase + j * ROW_H)
+    const allY = [...detY, ...llmY]
+    const minY = allY.length > 0 ? Math.min(...allY) : 0
+    const maxY = allY.length > 0 ? Math.max(...allY) : 0
+    const midY = (minY + maxY) / 2
+    const detStepY = R > 0 ? (detY[0]! + detY[R - 1]!) / 2 : midY
+    const llmStepY = L > 0 ? (llmY[0]! + llmY[L - 1]!) / 2 : midY
 
-  const edges = useMemo<Edge[]>(
-    () =>
-      FLOW_EDGES.map(([source, target]) => {
-        const sourceStep = stepByKey.get(source)
-        const targetStep = stepByKey.get(target)
-        const stroke =
-          sourceStep !== undefined ? STATUS_STROKE[sourceStep.status] : 'var(--border-strong)'
-        const animated = targetStep?.status === 'running' || sourceStep?.status === 'running'
-        return {
-          id: `${source}-${target}`,
-          source,
-          target,
-          animated,
-          style: { stroke, strokeWidth: 2 }
+    const at = (id: string, x: number, y: number): XYPosition => positions[id] ?? { x, y }
+
+    const stepDetail = (step: RunStep, ruleCount: number): string | null => {
+      if (step.status === 'running') {
+        return formatDuration(step.startedAt)
+      }
+      if (step.startedAt !== undefined && step.finishedAt !== undefined) {
+        return formatDuration(step.startedAt, step.finishedAt)
+      }
+      return ruleCount > 0 ? `${ruleCount} kural` : null
+    }
+
+    const list: Node[] = []
+
+    // Girdi
+    list.push({
+      id: 'input',
+      type: 'input',
+      position: at('input', 0, midY),
+      data: {
+        kind: run.kind,
+        thumb,
+        fileCount: input !== null && input.input.kind === 'code' ? input.input.files.length : null,
+        selected: selected?.kind === 'input'
+      }
+    })
+
+    // Omurga adımları (rule olmayanlar) + det/llm adımları
+    for (const step of run.steps) {
+      const isDet = step.key === 'deterministic'
+      const isLlm = step.key === 'llm'
+      const col =
+        step.key === 'ingest'
+          ? 1
+          : isDet || isLlm
+            ? 2
+            : step.key === 'coverage'
+              ? 4
+              : step.key === 'gate'
+                ? 5
+                : step.key === 'persist'
+                  ? 6
+                  : 7 // notify
+      const y = isDet ? detStepY : isLlm ? llmStepY : midY
+      const ruleCount = isDet ? R : isLlm ? L : 0
+      list.push({
+        id: step.key,
+        type: 'step',
+        position: at(step.key, col * COL_W, y),
+        data: {
+          name: step.name,
+          status: step.status,
+          detail: stepDetail(step, ruleCount),
+          selected: selected?.kind === 'step' && selected.key === step.key
         }
-      }),
-    [stepByKey]
-  )
+      })
+    }
+
+    // Kural node'ları (deterministik üstte, AI altta)
+    const detStep = run.steps.find((s) => s.key === 'deterministic')
+    const llmStep = run.steps.find((s) => s.key === 'llm')
+    detRules.forEach((rule, i) => {
+      list.push({
+        id: ruleNodeId(rule.key),
+        type: 'rule',
+        position: at(ruleNodeId(rule.key), 3 * COL_W, detY[i]!),
+        data: {
+          title: rule.title,
+          evaluation: rule.evaluation,
+          severity: rule.severity,
+          weight: rule.weight,
+          outcome: outcomeByKey.get(rule.key) ?? null,
+          running: detStep?.status === 'running',
+          selected: selected?.kind === 'rule' && selected.key === rule.key
+        }
+      })
+    })
+    llmRules.forEach((rule, j) => {
+      list.push({
+        id: ruleNodeId(rule.key),
+        type: 'rule',
+        position: at(ruleNodeId(rule.key), 3 * COL_W, llmY[j]!),
+        data: {
+          title: rule.title,
+          evaluation: rule.evaluation,
+          severity: rule.severity,
+          weight: rule.weight,
+          outcome: outcomeByKey.get(rule.key) ?? null,
+          running: llmStep?.status === 'running',
+          selected: selected?.kind === 'rule' && selected.key === rule.key
+        }
+      })
+    })
+
+    // Sonuç
+    list.push({
+      id: 'result',
+      type: 'result',
+      position: at('result', 8 * COL_W, midY),
+      data: {
+        score: run.score ?? null,
+        level: run.level ?? null,
+        gatePassed: run.gatePassed ?? null,
+        selected: selected?.kind === 'result'
+      }
+    })
+
+    return list
+  }, [run, input, thumb, selected, detRules, llmRules, outcomeByKey, positions, tick])
+
+  // Kenarlar: omurga + kural dalları. Uç noktalardan biri çalışıyorsa animasyonlu.
+  const edges = useMemo<Edge[]>(() => {
+    if (run === null) {
+      return []
+    }
+    const stepStatus = (key: string): RunStep['status'] | null => stepByKey.get(key)?.status ?? null
+    const running = (key: string): boolean => stepStatus(key) === 'running'
+    const strokeFor = (srcKey: string): string => {
+      const s = stepStatus(srcKey)
+      return s !== null ? STATUS_STROKE[s] : 'var(--border-strong)'
+    }
+    const mk = (source: string, target: string, srcKey: string, tgtKey: string): Edge => ({
+      id: `${source}->${target}`,
+      source,
+      target,
+      animated: running(srcKey) || running(tgtKey),
+      style: { stroke: strokeFor(srcKey), strokeWidth: 2 }
+    })
+
+    const list: Edge[] = []
+    const hasDet = run.steps.some((s) => s.key === 'deterministic')
+    const hasLlm = run.steps.some((s) => s.key === 'llm')
+
+    list.push(mk('input', 'ingest', 'ingest', 'ingest'))
+    if (hasDet) {
+      list.push(mk('ingest', 'deterministic', 'ingest', 'deterministic'))
+      if (detRules.length === 0) {
+        list.push(mk('deterministic', 'coverage', 'deterministic', 'coverage'))
+      }
+      for (const rule of detRules) {
+        list.push(mk('deterministic', ruleNodeId(rule.key), 'deterministic', 'deterministic'))
+        list.push(mk(ruleNodeId(rule.key), 'coverage', 'deterministic', 'coverage'))
+      }
+    }
+    if (hasLlm) {
+      list.push(mk('ingest', 'llm', 'ingest', 'llm'))
+      if (llmRules.length === 0) {
+        list.push(mk('llm', 'coverage', 'llm', 'coverage'))
+      }
+      for (const rule of llmRules) {
+        list.push(mk('llm', ruleNodeId(rule.key), 'llm', 'llm'))
+        list.push(mk(ruleNodeId(rule.key), 'coverage', 'llm', 'coverage'))
+      }
+    }
+    if (!hasDet && !hasLlm) {
+      list.push(mk('ingest', 'coverage', 'ingest', 'coverage'))
+    }
+    list.push(mk('coverage', 'gate', 'coverage', 'gate'))
+    list.push(mk('gate', 'persist', 'gate', 'persist'))
+    list.push(mk('persist', 'notify', 'persist', 'notify'))
+    list.push(mk('notify', 'result', 'notify', 'notify'))
+    return list
+  }, [run, stepByKey, detRules, llmRules])
 
   // Liste geldiğinde ve hiçbir run açık değilken en yenisini otomatik seç.
   useEffect(() => {
@@ -281,12 +484,28 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
       setSelected({ kind: 'input' })
     } else if (id === 'result') {
       setSelected({ kind: 'result' })
+    } else if (id.startsWith('rule:')) {
+      setSelected({ kind: 'rule', key: id.slice('rule:'.length) })
     } else {
       setSelected({ kind: 'step', key: id })
     }
   }, [])
 
   const clearSelection = useCallback(() => setSelected(null), [])
+
+  const onNodesChange = useCallback((changes: readonly NodeChange[]): void => {
+    setPositions((cur) => {
+      let next = cur
+      for (const change of changes) {
+        if (change.type === 'position' && change.position !== undefined) {
+          next = { ...next, [change.id]: change.position }
+        }
+      }
+      return next
+    })
+  }, [])
+
+  const resetLayout = useCallback(() => setPositions({}), [])
 
   const cancel = useCallback((): void => {
     if (openRunId === null) {
@@ -307,12 +526,15 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     logs,
     input,
     report,
+    rules: relevantRules,
     thumb,
     selected,
     selectNode,
     clearSelection,
     nodes,
     edges,
+    onNodesChange,
+    resetLayout,
     stepByKey,
     cancel,
     error

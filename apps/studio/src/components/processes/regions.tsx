@@ -6,7 +6,7 @@
  */
 
 import type { ReviewKind } from '@covora/types'
-import { Background, Controls, MiniMap, ReactFlow, type Node } from '@xyflow/react'
+import { Background, Controls, MiniMap, Panel, ReactFlow, type Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
 import {
@@ -108,26 +108,33 @@ export const ProcessGraph = ({ proc }: { readonly proc: ProcessesState }): React
       nodes={proc.nodes}
       edges={proc.edges}
       nodeTypes={NODE_TYPES}
+      onNodesChange={(changes) => proc.onNodesChange(changes)}
       onNodeClick={(_, node: Node) => proc.selectNode(node.id)}
       onPaneClick={() => proc.clearSelection()}
       fitView
-      fitViewOptions={{ padding: 0.18 }}
-      nodesDraggable={false}
+      fitViewOptions={{ padding: 0.16 }}
+      nodesDraggable
       nodesConnectable={false}
+      elevateNodesOnSelect
       proOptions={{ hideAttribution: true }}
-      minZoom={0.25}
-      maxZoom={1.8}
+      minZoom={0.2}
+      maxZoom={2}
     >
-      <Background color="var(--line)" gap={24} size={1} />
+      <Background color="var(--line)" gap={26} size={1} />
       <Controls showInteractive={false} />
       <MiniMap pannable zoomable className="proc-minimap" />
+      <Panel position="top-right" className="flow-panel">
+        <button type="button" className="flow-panel__btn" onClick={() => proc.resetLayout()}>
+          Düzeni sıfırla
+        </button>
+      </Panel>
     </ReactFlow>
   )
 }
 
 /** Özellikler: seçili node'un detayı (girdi / adım / sonuç) ya da run özeti. */
 export const ProcessInspector = ({ proc }: { readonly proc: ProcessesState }): React.JSX.Element => {
-  const { run, selected, logs, input, thumb, report, stepByKey } = proc
+  const { run, selected, logs, input, thumb, report, stepByKey, rules } = proc
 
   if (run === null) {
     return <div className="props__desc">Bir pipeline seçildiğinde detaylar burada görünür.</div>
@@ -228,6 +235,69 @@ export const ProcessInspector = ({ proc }: { readonly proc: ProcessesState }): R
               </div>
             ))
           )}
+        </div>
+      </div>
+    )
+  }
+
+  if (selected.kind === 'rule') {
+    const rule = rules.find((item) => item.key === selected.key) ?? null
+    if (rule === null) {
+      return <div className="props__desc">Kural bilgisi yükleniyor…</div>
+    }
+    const result = report?.results.find((item) => item.ruleId === rule.key) ?? null
+    const SEV_LABEL: Record<typeof rule.severity, string> = {
+      blocker: 'Blocker',
+      warning: 'Uyarı',
+      info: 'Bilgi'
+    }
+    return (
+      <div className="inspector">
+        <div className="props__name">{rule.title}</div>
+        <div className="props__key mono">{rule.key}</div>
+        <dl className="kv">
+          <dt>Değerlendirme</dt>
+          <dd>{rule.evaluation === 'llm' ? 'AI-yargı' : 'Deterministik'}</dd>
+          <dt>Önem</dt>
+          <dd>{SEV_LABEL[rule.severity]}</dd>
+          <dt>Ağırlık</dt>
+          <dd>{rule.weight}</dd>
+          <dt>Sonuç</dt>
+          <dd>
+            {result === null ? (
+              '— (henüz değerlendirilmedi)'
+            ) : (
+              <span className={`badge badge--${result.outcome}`}>{OUTCOME_LABEL[result.outcome]}</span>
+            )}
+          </dd>
+        </dl>
+        {rule.description.length > 0 && (
+          <>
+            <div className="props__group">Açıklama / talimat</div>
+            <p className="rule-desc">{rule.description}</p>
+          </>
+        )}
+        {result?.note !== undefined && result.note.length > 0 && (
+          <>
+            <div className="props__group">Gerekçe</div>
+            <p className="rule-desc">{result.note}</p>
+          </>
+        )}
+        <div className="props__group">İlgili loglar</div>
+        <div className="detail-logs">
+          {(() => {
+            const matched = logs.filter((l) => l.message.startsWith(`${rule.title}:`))
+            return matched.length === 0 ? (
+              <div className="console__empty">Bu kurala ait log yok</div>
+            ) : (
+              matched.map((line) => (
+                <div key={line.seq} className="console__line">
+                  <span className="console__ts">{formatTime(line.at)}</span>
+                  <span style={{ color: LOG_COLOR[line.level] }}>{line.message}</span>
+                </div>
+              ))
+            )
+          })()}
         </div>
       </div>
     )

@@ -5,7 +5,14 @@
  * sabit düzen, kenar üreticisi ve paylaşılan etiket/biçim yardımcıları.
  */
 
-import type { ReviewKind, RuleResult, RunLogLine, RunStatus, StepStatus } from '@covora/types'
+import type {
+  ReviewKind,
+  RuleResult,
+  RunLogLine,
+  RunStatus,
+  Severity,
+  StepStatus
+} from '@covora/types'
 import { Handle, Position, type Edge, type Node, type NodeProps } from '@xyflow/react'
 
 export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
@@ -55,7 +62,8 @@ export const formatDuration = (from?: string, to?: string): string | null => {
     return null
   }
   const end = to !== undefined ? new Date(to).getTime() : Date.now()
-  const ms = end - new Date(from).getTime()
+  // Saat kayması / henüz yazılmamış bitiş zamanı negatif verebilir; 0'a sıkıştır.
+  const ms = Math.max(0, end - new Date(from).getTime())
   if (ms < 1000) {
     return `${ms} ms`
   }
@@ -73,6 +81,8 @@ interface StepNodeData extends Record<string, unknown> {
   readonly name: string
   readonly status: StepStatus
   readonly selected: boolean
+  /** Canlı süre ya da kural sayısı gibi alt satır (örn. "12.4 sn", "3 kural"). */
+  readonly detail: string | null
 }
 
 const StepNode = ({ data }: NodeProps): React.JSX.Element => {
@@ -83,8 +93,52 @@ const StepNode = ({ data }: NodeProps): React.JSX.Element => {
       <span className="fnode__icon">{STEP_GLYPH[d.status]}</span>
       <span className="fnode__body">
         <span className="fnode__name">{d.name}</span>
-        <span className="fnode__status">{STEP_STATUS_LABEL[d.status]}</span>
+        <span className="fnode__status">
+          {STEP_STATUS_LABEL[d.status]}
+          {d.detail !== null && <span className="fnode__detail"> · {d.detail}</span>}
+        </span>
       </span>
+      {d.status === 'running' && <span className="fnode__spin" aria-hidden />}
+      <Handle type="source" position={Position.Right} className="fnode__handle" />
+    </div>
+  )
+}
+
+interface RuleNodeData extends Record<string, unknown> {
+  readonly title: string
+  readonly evaluation: 'deterministic' | 'llm'
+  readonly severity: Severity
+  readonly weight: number
+  /** Nihai sonuç (rapor geldiğinde); henüz yoksa null. */
+  readonly outcome: RuleResult['outcome'] | null
+  /** Üst adım çalışıyor mu (neon efekti). */
+  readonly running: boolean
+  readonly selected: boolean
+}
+
+const RuleNode = ({ data }: NodeProps): React.JSX.Element => {
+  const d = data as RuleNodeData
+  const state =
+    d.outcome !== null ? `fnode--rule-${d.outcome}` : d.running ? 'fnode--running' : 'fnode--rule-idle'
+  return (
+    <div className={`fnode fnode--rule ${state}${d.selected ? ' is-selected' : ''}`}>
+      <Handle type="target" position={Position.Left} className="fnode__handle" />
+      <span className="fnode__rtop">
+        <span className={`fnode__tag fnode__tag--${d.evaluation}`}>
+          {d.evaluation === 'llm' ? 'AI' : 'DET'}
+        </span>
+        {d.severity === 'blocker' && <span className="fnode__blocker">BLOCKER</span>}
+        <span className="fnode__weight">ağ. {d.weight}</span>
+      </span>
+      <span className="fnode__name">{d.title}</span>
+      <span className="fnode__rstatus">
+        {d.outcome !== null
+          ? OUTCOME_LABEL[d.outcome]
+          : d.running
+            ? 'değerlendiriliyor…'
+            : 'bekliyor'}
+      </span>
+      {d.running && d.outcome === null && <span className="fnode__spin" aria-hidden />}
       <Handle type="source" position={Position.Right} className="fnode__handle" />
     </div>
   )
@@ -139,31 +193,11 @@ const ResultNode = ({ data }: NodeProps): React.JSX.Element => {
   )
 }
 
-export const NODE_TYPES = { step: StepNode, input: InputNode, result: ResultNode }
+export const NODE_TYPES = { step: StepNode, input: InputNode, result: ResultNode, rule: RuleNode }
 
-export const LAYOUT: Record<string, { x: number; y: number }> = {
-  input: { x: 0, y: 150 },
-  ingest: { x: 230, y: 150 },
-  deterministic: { x: 470, y: 50 },
-  llm: { x: 470, y: 250 },
-  coverage: { x: 720, y: 150 },
-  gate: { x: 960, y: 150 },
-  persist: { x: 1190, y: 150 },
-  notify: { x: 1420, y: 150 },
-  result: { x: 1650, y: 150 }
-}
-
-export const FLOW_EDGES: readonly (readonly [string, string])[] = [
-  ['input', 'ingest'],
-  ['ingest', 'deterministic'],
-  ['ingest', 'llm'],
-  ['deterministic', 'coverage'],
-  ['llm', 'coverage'],
-  ['coverage', 'gate'],
-  ['gate', 'persist'],
-  ['persist', 'notify'],
-  ['notify', 'result']
-]
+/** Grafik düzeni için kolon genişliği ve satır yüksekliği (px). */
+export const COL_W = 250
+export const ROW_H = 92
 
 export const STATUS_STROKE: Record<StepStatus, string> = {
   pending: 'var(--border-strong)',
@@ -174,5 +208,5 @@ export const STATUS_STROKE: Record<StepStatus, string> = {
   cancelled: 'var(--border-strong)'
 }
 
-export type { StepNodeData, InputNodeData, ResultNodeData }
+export type { StepNodeData, InputNodeData, ResultNodeData, RuleNodeData }
 export type { Edge, Node }
