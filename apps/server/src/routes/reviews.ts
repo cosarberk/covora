@@ -7,7 +7,7 @@
  * ile canlı izleyebilir.
  */
 
-import { reviewInputSchema, type ReviewRun, type RunLogLine } from '@covora/types'
+import { reviewInputSchema, reviewOriginSchema, type ReviewRun, type RunLogLine } from '@covora/types'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 
@@ -23,7 +23,9 @@ import { streamRunEvents } from './sse.js'
 const createReviewBodySchema = z.object({
   projectKey: z.string().min(1),
   codeHash: z.string().min(1),
-  input: reviewInputSchema
+  input: reviewInputSchema,
+  /** Tetikleyen köken (opsiyonel; pipeline/CLI gönderir). */
+  origin: reviewOriginSchema.optional()
 })
 
 /** Review route bağımlılıkları. */
@@ -55,7 +57,11 @@ export const registerReviewRoutes = (app: FastifyInstance, deps: ReviewRoutesDep
       return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
     }
     try {
-      const result = await enqueueReview(deps, parsed.data)
+      const { origin, ...rest } = parsed.data
+      const result = await enqueueReview(deps, {
+        ...rest,
+        ...(origin !== undefined ? { origin } : {})
+      })
       return reply.status(202).send(result)
     } catch (error) {
       if (error instanceof ProjectNotFoundError) {

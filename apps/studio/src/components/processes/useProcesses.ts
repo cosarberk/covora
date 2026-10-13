@@ -327,6 +327,7 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
         kind: run.kind,
         thumb,
         fileCount: input !== null && input.input.kind === 'code' ? input.input.files.length : null,
+        hasSource: run.origin?.refUrl !== undefined,
         selected: selected?.kind === 'input'
       }
     })

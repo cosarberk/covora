@@ -13,6 +13,7 @@ import type {
   LogLevel,
   ReviewInput,
   ReviewKind,
+  ReviewOrigin,
   ReviewOutcome,
   ReviewRun,
   RuleResult,
@@ -33,6 +34,8 @@ export interface CreateRunInput {
   readonly codeHash: string
   /** Review girdisi (worker işleyene dek saklanır). */
   readonly input: ReviewInput
+  /** Review'u tetikleyen köken bilgisi (opsiyonel). */
+  readonly origin?: ReviewOrigin
 }
 
 /** Bir worker tarafından kapılan (claim edilen) run. */
@@ -65,6 +68,9 @@ export const createRun = async (
       kind: input.kind,
       codeHash: input.codeHash,
       input: input.input as unknown as Prisma.InputJsonValue,
+      ...(input.origin !== undefined
+        ? { origin: input.origin as unknown as Prisma.InputJsonValue }
+        : {}),
       status: 'queued',
       steps: {
         create: REVIEW_PIPELINE_STEPS.map((step, order) => ({

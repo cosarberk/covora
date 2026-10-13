@@ -18,6 +18,7 @@
 
 import { z } from 'zod'
 
+import { reviewOriginSchema } from './review-origin.js'
 import { reviewKindSchema } from './rule.js'
 import { reviewOutcomeSchema } from './review.js'
 
@@ -191,7 +192,12 @@ export const reviewRunSchema = z.object({
   /** Önceki aynı tür run'a göre skor farkı (ilk run'da null). */
   delta: z.number().nullable().optional(),
   /** Run `failed` olduğunda kök hata özeti. */
-  error: z.string().optional()
+  error: z.string().optional(),
+  /**
+   * Review'u tetikleyen köken bilgisi (ortam, MR/PR/commit bağlantısı, dal,
+   * commit, kişi). Pipeline/CLI gönderdiyse dolu; tarayıcı/eski kayıtlarda yok.
+   */
+  origin: reviewOriginSchema.optional()
 })
 
 /** {@link reviewRunSchema} tip çıkarımı. */

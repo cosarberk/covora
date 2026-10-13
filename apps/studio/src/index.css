@@ -1313,6 +1313,14 @@ img {
   color: var(--text-dim);
   padding: 14px 0;
 }
+.fnode__src {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
 .fnode--result {
   align-items: center;
 }
@@ -1534,6 +1542,34 @@ img {
 }
 .file-list__size {
   color: var(--text-faint);
+}
+
+/* Köken (origin) bağlantıları: girdi/özet inspector'ında kaynağa gidiş. */
+.origin__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.origin__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--accent);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 6px 10px;
+}
+.origin__link:hover {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+.origin__link--muted {
+  color: var(--text-dim);
+  font-weight: 500;
 }
 
 .report-score {

@@ -148,6 +148,8 @@ interface InputNodeData extends Record<string, unknown> {
   readonly kind: ReviewKind
   readonly thumb: string | null
   readonly fileCount: number | null
+  /** Köken bir kaynağa (MR/PR/commit) bağlıysa node'da ipucu gösterilir. */
+  readonly hasSource: boolean
   readonly selected: boolean
 }
 
@@ -165,6 +167,7 @@ const InputNode = ({ data }: NodeProps): React.JSX.Element => {
       ) : (
         <span className="fnode__placeholder">{d.fileCount ?? '?'} dosya</span>
       )}
+      {d.hasSource && <span className="fnode__src">↗ kaynak</span>}
       <Handle type="source" position={Position.Right} className="fnode__handle" />
     </div>
   )

@@ -6,6 +6,7 @@
 
 import {
   coverageConfigSchema,
+  reviewOriginSchema,
   userRoleSchema,
   webhookEventSchema,
   type AuditRecord,
@@ -15,6 +16,7 @@ import {
   type Pack,
   type ProviderConfig,
   type ProviderType,
+  type ReviewOrigin,
   type ReviewRun,
   type Rule,
   type RunLogLine,
@@ -170,6 +172,37 @@ export const toRunLogLine = (log: PrismaRunLog): RunLogLine => ({
 })
 
 /** Prisma run kaydını (adımları ve varsa bağlı review özetiyle) domain {@link ReviewRun}'a dönüştürür. */
+/**
+ * Saklanan ham `origin` JSON'ını doğrular. Geçersiz ya da tamamen boş (anlamlı
+ * hiçbir alan yok) ise `undefined` döner — Studio boş bir köken bölümü
+ * göstermesin diye.
+ */
+const toReviewOrigin = (raw: unknown): ReviewOrigin | undefined => {
+  if (raw === null || raw === undefined) {
+    return undefined
+  }
+  const parsed = reviewOriginSchema.safeParse(raw)
+  if (!parsed.success) {
+    return undefined
+  }
+  const o = parsed.data
+  const hasActor = o.actor !== undefined && (o.actor.name !== undefined || o.actor.email !== undefined)
+  const hasAny =
+    o.source !== undefined ||
+    o.repoUrl !== undefined ||
+    o.refUrl !== undefined ||
+    o.branch !== undefined ||
+    o.commitSha !== undefined ||
+    hasActor
+  return hasAny ? o : undefined
+}
+
+/** `origin` varsa alanı döner, yoksa boş (spread için). */
+const originField = (raw: unknown): { readonly origin?: ReviewOrigin } => {
+  const origin = toReviewOrigin(raw)
+  return origin !== undefined ? { origin } : {}
+}
+
 export const toReviewRun = (
   run: PrismaReviewRun,
   projectKey: string,
@@ -192,7 +225,8 @@ export const toReviewRun = (
   level: review?.level ?? null,
   gatePassed: review?.gatePassed ?? null,
   delta: run.delta,
-  ...(run.error !== null ? { error: run.error } : {})
+  ...(run.error !== null ? { error: run.error } : {}),
+  ...originField(run.origin)
 })
 
 /** Prisma run kaydını (bağlı review özetiyle) liste satırına dönüştürür. */

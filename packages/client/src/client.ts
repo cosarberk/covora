@@ -8,7 +8,7 @@
  * ilerleme olayını `onProgress`'e iletir.
  */
 
-import type { ReviewInput, ReviewRun, RunEvent, RunStatus } from '@covora/types'
+import type { ReviewInput, ReviewOrigin, ReviewRun, RunEvent, RunStatus } from '@covora/types'
 
 import { captureScreenshot } from './capture.js'
 import { runDomChecks } from './dom-checks.js'
@@ -41,6 +41,12 @@ export interface ReviewRequestParams {
   readonly input: ReviewInput
   /** Review edilen kodun/durumun hash'i. */
   readonly codeHash: string
+  /**
+   * Review'u tetikleyen köken (opsiyonel). Pipeline/CLI MR-PR/commit bağlantısı,
+   * dal, commit ve kişiyi geçirir; Studio bunu kaynağa tıklanır bağlantı olarak
+   * gösterir. Tarayıcıdan tetiklemede genelde boş bırakılır.
+   */
+  readonly origin?: ReviewOrigin
 }
 
 /** Kuyruğa-alma yanıtı (POST /reviews). */
@@ -87,7 +93,8 @@ export const createCovoraClient = (config: CovoraClientConfig): CovoraClient => 
       body: JSON.stringify({
         projectKey: config.projectKey,
         codeHash: params.codeHash,
-        input: params.input
+        input: params.input,
+        ...(params.origin !== undefined ? { origin: params.origin } : {})
       })
     })
     if (!response.ok) {

@@ -197,6 +197,8 @@ model ReviewRun {
   status     RunStatus  @default(queued)
   /// Review girdisi (ekran görüntüsü/dosyalar) — worker işleyene dek saklanır, sonra temizlenebilir.
   input      Json
+  /// Review'u tetikleyen köken metadata'sı (source/repoUrl/refUrl/branch/commit/actor). Opsiyonel; pipeline/CLI doldurur.
+  origin     Json?
   /// Başarıyla üretilen sonuç kaydı (tamamlanınca bağlanır).
   reviewId   String?    @unique
   review     Review?    @relation(fields: [reviewId], references: [id], onDelete: SetNull)

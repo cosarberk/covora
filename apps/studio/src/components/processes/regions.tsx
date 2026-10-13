@@ -5,7 +5,7 @@
  * listesi, viewport'taki node grafiği (zoom/pan) ve Özellikler'deki inspector.
  */
 
-import type { ReviewKind } from '@covora/types'
+import type { ReviewKind, ReviewOrigin, ReviewSource } from '@covora/types'
 import { Background, Controls, MiniMap, Panel, ReactFlow, type Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
@@ -134,6 +134,69 @@ export const ProcessGraph = ({ proc }: { readonly proc: ProcessesState }): React
   )
 }
 
+/** Review'u tetikleyen ortamın okunur etiketi. */
+const SOURCE_LABEL: Record<ReviewSource, string> = {
+  browser: 'Tarayıcı',
+  cli: 'CLI',
+  ci: 'Pipeline (CI)'
+}
+
+/**
+ * Review'un köken bilgisi: tetikleyen ortam/kişi, dal, commit ve kaynağa
+ * (GitHub/GitLab MR/PR/commit) tıklanabilir bağlantı. Girdi node'undan kaynağa
+ * geçiş buradan yapılır.
+ */
+const OriginBlock = ({ origin }: { readonly origin: ReviewOrigin }): React.JSX.Element => {
+  const actor =
+    origin.actor !== undefined ? (origin.actor.name ?? origin.actor.email ?? null) : null
+  const shortSha = origin.commitSha !== undefined ? origin.commitSha.slice(0, 10) : null
+  return (
+    <>
+      <div className="props__group">Kaynak</div>
+      <dl className="kv">
+        {origin.source !== undefined && (
+          <>
+            <dt>Ortam</dt>
+            <dd>{SOURCE_LABEL[origin.source]}</dd>
+          </>
+        )}
+        {actor !== null && (
+          <>
+            <dt>Tetikleyen</dt>
+            <dd>{actor}</dd>
+          </>
+        )}
+        {origin.branch !== undefined && (
+          <>
+            <dt>Dal</dt>
+            <dd className="mono">{origin.branch}</dd>
+          </>
+        )}
+        {shortSha !== null && (
+          <>
+            <dt>Commit</dt>
+            <dd className="mono">{shortSha}</dd>
+          </>
+        )}
+      </dl>
+      {(origin.refUrl !== undefined || origin.repoUrl !== undefined) && (
+        <div className="origin__links">
+          {origin.refUrl !== undefined && (
+            <a className="origin__link" href={origin.refUrl} target="_blank" rel="noreferrer">
+              Kaynağa git (MR/PR/commit)
+            </a>
+          )}
+          {origin.repoUrl !== undefined && (
+            <a className="origin__link origin__link--muted" href={origin.repoUrl} target="_blank" rel="noreferrer">
+              Depo
+            </a>
+          )}
+        </div>
+      )}
+    </>
+  )
+}
+
 /** Özellikler: seçili node'un detayı (girdi / adım / sonuç) ya da run özeti. */
 export const ProcessInspector = ({ proc }: { readonly proc: ProcessesState }): React.JSX.Element => {
   const { run, selected, logs, input, thumb, report, stepByKey, rules } = proc
@@ -163,6 +226,7 @@ export const ProcessInspector = ({ proc }: { readonly proc: ProcessesState }): R
           <dt>Süre</dt>
           <dd>{formatDuration(run.startedAt, run.finishedAt) ?? '—'}</dd>
         </dl>
+        {run.origin !== undefined && <OriginBlock origin={run.origin} />}
         {(run.status === 'queued' || run.status === 'running') && (
           <button
             type="button"
@@ -208,6 +272,7 @@ export const ProcessInspector = ({ proc }: { readonly proc: ProcessesState }): R
             <dt>Client</dt>
             <dd>{input.input.clientResults?.length ?? 0} sonuç</dd>
           </dl>
+          {run.origin !== undefined && <OriginBlock origin={run.origin} />}
         </div>
       )
     }
@@ -224,6 +289,7 @@ export const ProcessInspector = ({ proc }: { readonly proc: ProcessesState }): R
             </li>
           ))}
         </ul>
+        {run.origin !== undefined && <OriginBlock origin={run.origin} />}
       </div>
     )
   }

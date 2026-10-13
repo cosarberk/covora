@@ -6,7 +6,7 @@
  * yaratır, kuyruk sırasını hesaplar ve `run.created` olayını yayınlar.
  */
 
-import type { ReviewInput, ReviewRun } from '@covora/types'
+import type { ReviewInput, ReviewOrigin, ReviewRun } from '@covora/types'
 
 import type { RunEventBus } from './events.js'
 
@@ -28,6 +28,7 @@ export interface EnqueueReviewDeps {
     readonly kind: ReviewInput['kind']
     readonly codeHash: string
     readonly input: ReviewInput
+    readonly origin?: ReviewOrigin
   }) => Promise<{ readonly id: string }>
   /** Bir run'ın kuyruktaki sırasını getirir. */
   readonly getQueuePosition: (runId: string) => Promise<number | undefined>
@@ -42,6 +43,8 @@ export interface EnqueueReviewRequest {
   readonly projectKey: string
   readonly input: ReviewInput
   readonly codeHash: string
+  /** Review'u tetikleyen köken bilgisi (opsiyonel; pipeline/CLI gönderir). */
+  readonly origin?: ReviewOrigin
 }
 
 /** Kuyruğa-alma yanıtı. */
@@ -72,7 +75,8 @@ export const enqueueReview = async (
     projectId: project.id,
     kind: request.input.kind,
     codeHash: request.codeHash,
-    input: request.input
+    input: request.input,
+    ...(request.origin !== undefined ? { origin: request.origin } : {})
   })
 
   const [queuePosition, run] = await Promise.all([deps.getQueuePosition(id), deps.getRun(id)])
