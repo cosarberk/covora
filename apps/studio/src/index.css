@@ -2455,6 +2455,36 @@ input:focus-visible,
   border-radius: 999px;
   background: linear-gradient(90deg, var(--accent), #5be0c0);
 }
+.meter--sm {
+  height: 5px;
+  margin-bottom: 4px;
+}
+
+/* Coverage dökümü (UI / Kod) */
+.cov-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 12px 0 6px;
+}
+.cov-split__item {
+  min-width: 0;
+}
+.cov-split__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.cov-split__val {
+  font-size: 17px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.cov-split__n {
+  font-size: 11px;
+  color: var(--text-faint);
+}
 
 .ring {
   flex-shrink: 0;

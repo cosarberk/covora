@@ -169,7 +169,7 @@ export const DashboardPanel = ({ api, onOpenProject }: DashboardPanelProps): Rea
     return <div className="dash" />
   }
 
-  const { stats, recent } = summary
+  const { stats, coverage, recent } = summary
   const gateColor =
     stats.gatePassRate >= 80 ? 'var(--pass)' : stats.gatePassRate >= 50 ? 'var(--warn)' : 'var(--fail)'
 
@@ -316,15 +316,41 @@ export const DashboardPanel = ({ api, onOpenProject }: DashboardPanelProps): Rea
         </div>
 
         <div className="hero-card">
-          <div className="hero-card__head">Ortalama coverage</div>
-          <div className="hero-card__big">{stats.avgCoverage.toFixed(1)}</div>
+          <div className="hero-card__head">Coverage · birleşik</div>
+          <div className="hero-card__big">{coverage.combined.toFixed(1)}</div>
           <div className="meter">
             <div
               className="meter__fill"
-              style={{ width: `${Math.max(0, Math.min(100, stats.avgCoverage))}%` }}
+              style={{ width: `${Math.max(0, Math.min(100, coverage.combined))}%` }}
             />
           </div>
-          <div className="hero-card__muted">0–100 arası tüm review ortalaması</div>
+          <div className="cov-split">
+            <div className="cov-split__item">
+              <div className="cov-split__top">
+                <span className="badge">ui</span>
+                <span className="cov-split__val">{coverage.ui.avg.toFixed(1)}</span>
+              </div>
+              <div className="meter meter--sm">
+                <div className="meter__fill" style={{ width: `${Math.max(0, Math.min(100, coverage.ui.avg))}%` }} />
+              </div>
+              <span className="cov-split__n">
+                {coverage.ui.reviews} review · ağırlık {coverage.ui.ruleWeight}
+              </span>
+            </div>
+            <div className="cov-split__item">
+              <div className="cov-split__top">
+                <span className="badge">code</span>
+                <span className="cov-split__val">{coverage.code.avg.toFixed(1)}</span>
+              </div>
+              <div className="meter meter--sm">
+                <div className="meter__fill" style={{ width: `${Math.max(0, Math.min(100, coverage.code.avg))}%` }} />
+              </div>
+              <span className="cov-split__n">
+                {coverage.code.reviews} review · ağırlık {coverage.code.ruleWeight}
+              </span>
+            </div>
+          </div>
+          <div className="hero-card__muted">UI ve kod kapsaması kural ağırlığıyla harmanlanır</div>
         </div>
 
         <div className="hero-card">
