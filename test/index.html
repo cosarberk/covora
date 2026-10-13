@@ -200,6 +200,25 @@
         opacity: 0.6;
         cursor: default;
       }
+      .cv-actions {
+        display: flex;
+        gap: 8px;
+      }
+      #covora-review-code {
+        background: #0b0e1a;
+        color: #fff;
+        border: 1px solid var(--brand-2);
+        border-radius: 999px;
+        padding: 11px 18px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+      }
+      #covora-review-code:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
       .cv-head {
         display: flex;
         align-items: center;
@@ -319,7 +338,10 @@
     <!-- Covora review widget -->
     <div id="covora-widget">
       <div id="covora-status"></div>
-      <button id="covora-review" type="button">🔍 Covora Review</button>
+      <div class="cv-actions">
+        <button id="covora-review" type="button">UI Review</button>
+        <button id="covora-review-code" type="button">Kod Review</button>
+      </div>
     </div>
 
     <!-- 2) SDK bundle'ı (pnpm --filter @covora/client build → dist'ten kopyala) -->
@@ -329,6 +351,7 @@
     <script>
       const cfg = window.COVORA_CONFIG
       const btn = document.getElementById('covora-review')
+      const codeBtn = document.getElementById('covora-review-code')
       const panel = document.getElementById('covora-status')
 
       const client = Covora.createCovoraClient({
@@ -362,7 +385,7 @@
         const q = state.queuePosition ? ` · sıra ${state.queuePosition}` : ''
         const steps = [...state.steps.values()].sort((a, b) => a.order - b.order)
         panel.innerHTML =
-          `<div class="cv-head">🔍 ${STATUS_LABEL[state.status] || state.status}${q}</div>` +
+          `<div class="cv-head">${STATUS_LABEL[state.status] || state.status}${q}</div>` +
           (steps.length
             ? '<ul class="cv-steps">' +
               steps
@@ -396,6 +419,25 @@
         paint(state)
       }
 
+      // Nihai run sonucunu (coverage + gate) panele basar.
+      const paintResult = (state, run, tail) => {
+        const gateKnown = run.gatePassed !== null && run.gatePassed !== undefined
+        const gate = gateKnown
+          ? run.gatePassed
+            ? '<span class="cv-badge ok">GEÇTİ</span>'
+            : '<span class="cv-badge bad">KALDI</span>'
+          : ''
+        const score =
+          run.score !== null && run.score !== undefined
+            ? `Coverage <b>${run.score.toFixed(1)}</b> (${run.level || '—'}) `
+            : ''
+        paint(state, `<div style="margin-top:8px">${score}${gate}<br><span style="color:#6b7385">${tail}</span></div>`)
+      }
+
+      const paintError = (state, e) =>
+        paint(state, `<div class="cv-log" style="color:#f26d6d">Hata: ${e && e.message ? e.message : e}</div>`)
+
+      // UI review: #page'in ekran görüntüsü + DOM kontrolleri gönderilir.
       btn.addEventListener('click', async () => {
         btn.disabled = true
         const state = makeState()
@@ -406,25 +448,40 @@
           const run = await client.reviewUi('test-' + Date.now(), page, {
             onProgress: onProgress(state)
           })
-          const gateKnown = run.gatePassed !== null && run.gatePassed !== undefined
-          const gate = gateKnown
-            ? run.gatePassed
-              ? '<span class="cv-badge ok">GEÇTİ</span>'
-              : '<span class="cv-badge bad">KALDI</span>'
-            : ''
-          const score =
-            run.score !== null && run.score !== undefined
-              ? `Coverage <b>${run.score.toFixed(1)}</b> (${run.level || '—'}) `
-              : ''
-          paint(
-            state,
-            `<div style="margin-top:8px">${score}${gate}` +
-              '<br><span style="color:#6b7385">Detay: Studio → Süreçler</span></div>'
-          )
+          paintResult(state, run, 'Detay: Studio → Süreçler (UI)')
         } catch (e) {
-          paint(state, `<div class="cv-log" style="color:#f26d6d">Hata: ${e && e.message ? e.message : e}</div>`)
+          paintError(state, e)
         } finally {
           btn.disabled = false
+        }
+      })
+
+      // Kod review: sayfanın GERÇEK kaynağı dosya olarak gönderilir.
+      // Tarayıcıda diskten keyfi dosya okunamaz; sayfanın kendi sunulan
+      // kaynağı (./index.html) gerçek içeriktir. fetch başarısız olursa
+      // canlı DOM'un HTML'ine düşülür.
+      codeBtn.addEventListener('click', async () => {
+        codeBtn.disabled = true
+        const state = makeState()
+        paint(state, '<div class="cv-log">Kaynak dosyalar toplanıyor…</div>')
+        try {
+          let content
+          try {
+            const res = await fetch('./index.html', { cache: 'no-store' })
+            content = res.ok ? await res.text() : '<!doctype html>\n' + document.documentElement.outerHTML
+          } catch {
+            content = '<!doctype html>\n' + document.documentElement.outerHTML
+          }
+          const files = [{ path: 'index.html', content }]
+          const run = await client.review(
+            { input: { kind: 'code', files }, codeHash: 'code-' + Date.now() },
+            { onProgress: onProgress(state) }
+          )
+          paintResult(state, run, 'Detay: Studio → Süreçler (CODE)')
+        } catch (e) {
+          paintError(state, e)
+        } finally {
+          codeBtn.disabled = false
         }
       })
     </script>
