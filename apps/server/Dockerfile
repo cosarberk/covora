@@ -17,5 +17,8 @@ RUN corepack enable && apt-get update \
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app ./
+RUN chmod +x apps/server/docker-entrypoint.sh
 EXPOSE 4000
-CMD ["node", "apps/server/dist/index.js"]
+# Acilista once DB semasini uygular (prisma db push), sonra server'i baslatir.
+# Migration deploy yontemine (helm/Rancher Redeploy/restart) bagli degildir.
+CMD ["sh", "apps/server/docker-entrypoint.sh"]
