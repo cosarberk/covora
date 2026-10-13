@@ -131,6 +131,7 @@ export interface CreateProviderInput {
 /** Kural güncelleme girdisi. */
 export interface UpdateRuleInput {
   readonly title?: string
+  readonly description?: string
   readonly severity?: Severity
   readonly weight?: number
   readonly enabled?: boolean

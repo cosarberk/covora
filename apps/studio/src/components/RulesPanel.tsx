@@ -1,10 +1,11 @@
 /**
  * @module studio/components/RulesPanel
  *
- * Bir kural kümesini (bir pack'in ya da bir projenin abone olduğu pack'lerin
- * kuralları) listeler, düzenler (önem/ağırlık/durum) ve değişiklik geçmişini
- * (audit) gösterir. Oluşturma yalnızca `onCreate` verildiğinde (pack görünümü)
- * gösterilir.
+ * Kural stüdyosu. Bir kural kümesini (pack ya da projenin abone pack'leri)
+ * listeler; önem/ağırlık/durumu satır-içi, başlık/talimatı (description)
+ * açılır editörle düzenler; değişiklik geçmişini (audit) gösterir. AI kuralları
+ * için talimat (description) doğrudan LLM'e giden metindir — burada yazılır.
+ * Oluşturma yalnızca `onCreate` verildiğinde (pack görünümü) gösterilir.
  */
 
 import type {
@@ -32,21 +33,23 @@ export interface RulesPanelProps {
 }
 
 const SEVERITIES: readonly Severity[] = ['blocker', 'warning', 'info']
+const SEVERITY_LABEL: Record<Severity, string> = {
+  blocker: 'Blocker',
+  warning: 'Uyarı',
+  info: 'Bilgi'
+}
 
 const makeEmptyForm = (kind: ReviewKind): CreateRuleInput => ({
   key: '',
   title: '',
+  description: '',
   kind,
   evaluation: 'llm',
   severity: 'warning',
   weight: 1
 })
 
-/**
- * Kural yönetim paneli.
- *
- * @param props - API, yükleyici ve opsiyonel oluşturucu.
- */
+/** Kural yönetim paneli (stüdyo). */
 export const RulesPanel = ({
   api,
   loadRules,
@@ -61,6 +64,10 @@ export const RulesPanel = ({
   const [saving, setSaving] = useState(false)
   const [auditsFor, setAuditsFor] = useState<string | null>(null)
   const [audits, setAudits] = useState<readonly AuditRecord[]>([])
+  const [editFor, setEditFor] = useState<string | null>(null)
+  const [draftTitle, setDraftTitle] = useState('')
+  const [draftDesc, setDraftDesc] = useState('')
+  const [rowSaving, setRowSaving] = useState(false)
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -92,6 +99,27 @@ export const RulesPanel = ({
     }
   }
 
+  const openEditor = (rule: ManagementRule): void => {
+    if (editFor === rule.id) {
+      setEditFor(null)
+      return
+    }
+    setEditFor(rule.id)
+    setAuditsFor(null)
+    setDraftTitle(rule.title)
+    setDraftDesc(rule.description)
+  }
+
+  const saveEditor = async (ruleId: string): Promise<void> => {
+    setRowSaving(true)
+    try {
+      await patchRule(ruleId, { title: draftTitle.trim(), description: draftDesc })
+      setEditFor(null)
+    } finally {
+      setRowSaving(false)
+    }
+  }
+
   const showAudits = async (ruleId: string): Promise<void> => {
     if (auditsFor === ruleId) {
       setAuditsFor(null)
@@ -101,6 +129,7 @@ export const RulesPanel = ({
     try {
       setAudits(await api.listAudits(ruleId))
       setAuditsFor(ruleId)
+      setEditFor(null)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Bilinmeyen hata')
     }
@@ -130,51 +159,64 @@ export const RulesPanel = ({
   return (
     <section>
       {onCreate !== undefined && (
-        <form className="rule-form" onSubmit={(event) => void submit(event)}>
-          <input
-            className="input"
-            placeholder="anahtar"
-            value={form.key}
-            onChange={(event) => setForm({ ...form, key: event.target.value })}
-          />
-          <input
-            className="input input--grow"
-            placeholder="başlık"
-            value={form.title}
-            onChange={(event) => setForm({ ...form, title: event.target.value })}
-          />
-          <select
-            className="select"
-            value={form.evaluation}
-            onChange={(event) =>
-              setForm({ ...form, evaluation: event.target.value as RuleEvaluationType })
+        <form className="rule-form rule-form--card" onSubmit={(event) => void submit(event)}>
+          <div className="rule-form__row">
+            <input
+              className="input"
+              placeholder="anahtar (örn. header-exists)"
+              value={form.key}
+              onChange={(event) => setForm({ ...form, key: event.target.value })}
+            />
+            <input
+              className="input input--grow"
+              placeholder="başlık"
+              value={form.title}
+              onChange={(event) => setForm({ ...form, title: event.target.value })}
+            />
+            <select
+              className="select"
+              value={form.evaluation}
+              onChange={(event) =>
+                setForm({ ...form, evaluation: event.target.value as RuleEvaluationType })
+              }
+            >
+              <option value="llm">AI-yargı</option>
+              <option value="deterministic">Deterministik</option>
+            </select>
+            <select
+              className="select"
+              value={form.severity}
+              onChange={(event) => setForm({ ...form, severity: event.target.value as Severity })}
+            >
+              {SEVERITIES.map((severity) => (
+                <option key={severity} value={severity}>
+                  {SEVERITY_LABEL[severity]}
+                </option>
+              ))}
+            </select>
+            <input
+              className="input input--narrow"
+              type="number"
+              min={0.1}
+              step={0.1}
+              value={form.weight}
+              onChange={(event) => setForm({ ...form, weight: Number(event.target.value) })}
+            />
+            <button className="button" type="submit" disabled={saving}>
+              {saving ? 'Ekleniyor…' : 'Kural Ekle'}
+            </button>
+          </div>
+          <textarea
+            className="textarea"
+            rows={2}
+            placeholder={
+              form.evaluation === 'llm'
+                ? 'Talimat — AI’ya bu metin sorulur (ör. “Görsel hiyerarşi ve boşluklar tutarlı mı?”)'
+                : 'Açıklama (deterministik kural; talimat AI’ya gitmez)'
             }
-          >
-            <option value="llm">llm</option>
-            <option value="deterministic">deterministic</option>
-          </select>
-          <select
-            className="select"
-            value={form.severity}
-            onChange={(event) => setForm({ ...form, severity: event.target.value as Severity })}
-          >
-            {SEVERITIES.map((severity) => (
-              <option key={severity} value={severity}>
-                {severity}
-              </option>
-            ))}
-          </select>
-          <input
-            className="input input--narrow"
-            type="number"
-            min={0.1}
-            step={0.1}
-            value={form.weight}
-            onChange={(event) => setForm({ ...form, weight: Number(event.target.value) })}
+            value={form.description ?? ''}
+            onChange={(event) => setForm({ ...form, description: event.target.value })}
           />
-          <button className="button" type="submit" disabled={saving}>
-            {saving ? 'Ekleniyor…' : 'Kural Ekle'}
-          </button>
         </form>
       )}
 
@@ -190,11 +232,11 @@ export const RulesPanel = ({
             <tr>
               <th>Anahtar</th>
               <th>Başlık</th>
-              <th>Tür</th>
+              <th>Değerlendirme</th>
               <th>Önem</th>
               <th>Ağırlık</th>
               <th>Durum</th>
-              <th>Geçmiş</th>
+              <th>İşlem</th>
             </tr>
           </thead>
           <tbody>
@@ -204,7 +246,12 @@ export const RulesPanel = ({
                   <td className="mono">{rule.key}</td>
                   <td>{rule.title}</td>
                   <td>
-                    <span className="badge">{rule.kind}</span>
+                    <span
+                      className={`badge ${rule.evaluation === 'llm' ? 'badge--ai' : ''}`}
+                      title={rule.kind}
+                    >
+                      {rule.evaluation === 'llm' ? 'AI' : 'DET'}
+                    </span>
                   </td>
                   <td>
                     <select
@@ -216,7 +263,7 @@ export const RulesPanel = ({
                     >
                       {SEVERITIES.map((severity) => (
                         <option key={severity} value={severity}>
-                          {severity}
+                          {SEVERITY_LABEL[severity]}
                         </option>
                       ))}
                     </select>
@@ -246,12 +293,67 @@ export const RulesPanel = ({
                       {rule.enabled ? 'Etkin' : 'Kapalı'}
                     </button>
                   </td>
-                  <td>
+                  <td className="rule-actions">
+                    <button type="button" className="link-button" onClick={() => openEditor(rule)}>
+                      {editFor === rule.id ? 'Kapat' : 'Düzenle'}
+                    </button>
                     <button type="button" className="link-button" onClick={() => void showAudits(rule.id)}>
                       {auditsFor === rule.id ? 'Gizle' : 'Geçmiş'}
                     </button>
                   </td>
                 </tr>
+                {editFor === rule.id && (
+                  <tr>
+                    <td colSpan={7} className="editor-cell">
+                      <div className="rule-editor">
+                        <label className="field">
+                          <span className="field__label">Başlık</span>
+                          <input
+                            className="input"
+                            value={draftTitle}
+                            onChange={(event) => setDraftTitle(event.target.value)}
+                          />
+                        </label>
+                        <label className="field">
+                          <span className="field__label">
+                            {rule.evaluation === 'llm'
+                              ? 'Talimat (AI’ya giden metin)'
+                              : 'Açıklama'}
+                          </span>
+                          <textarea
+                            className="textarea"
+                            rows={4}
+                            value={draftDesc}
+                            onChange={(event) => setDraftDesc(event.target.value)}
+                          />
+                        </label>
+                        {rule.evaluation === 'llm' && (
+                          <p className="field__hint">
+                            Bu metin, checklist maddesi olarak AI’ya aynen gönderilir; net ve tek bir
+                            kontrolü ifade etmesi sonuçları iyileştirir.
+                          </p>
+                        )}
+                        <div className="rule-editor__actions">
+                          <button
+                            type="button"
+                            className="button"
+                            disabled={rowSaving || draftTitle.trim().length === 0}
+                            onClick={() => void saveEditor(rule.id)}
+                          >
+                            {rowSaving ? 'Kaydediliyor…' : 'Kaydet'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => setEditFor(null)}
+                          >
+                            Vazgeç
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {auditsFor === rule.id && (
                   <tr>
                     <td colSpan={7} className="audit-cell">
