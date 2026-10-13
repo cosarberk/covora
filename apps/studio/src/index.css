@@ -3751,3 +3751,31 @@ input:focus-visible,
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- Review rapor dökümü ---- */
+.review-report {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.review-report__cov {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.review-report__blockers {
+  margin-top: 6px;
+  color: var(--fail);
+}
+.review-report__reasons {
+  margin-top: 8px;
+}
+.review-report__reasons-title {
+  color: var(--text-dim);
+}
+.review-report__reasons ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--fail);
+  line-height: 1.6;
+}

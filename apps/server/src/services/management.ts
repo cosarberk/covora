@@ -21,6 +21,7 @@ import type {
   ProviderConfig,
   ProviderHealth,
   ReviewKind,
+  ReviewOutcome,
   Rule,
   RuleResult,
   Severity,
@@ -115,6 +116,8 @@ export interface ManagementDeps {
   readonly listRecentReviews: (projectId: string, limit?: number) => Promise<readonly ReviewRecord[]>
   /** Bir review'ın kural bazında sonuçlarını getirir. */
   readonly listReviewResults: (reviewId: string) => Promise<readonly RuleResult[]>
+  /** Bir review'ın tam coverage/gate dökümünü getirir (yoksa null). */
+  readonly getReviewOutcome: (reviewId: string) => Promise<ReviewOutcome | null>
   /** Tüm projeler genelinde genel bakış özetini getirir. */
   readonly getDashboard: () => Promise<DashboardSummary>
   /** Projenin bildirim webhook'larını listeler. */

@@ -4,7 +4,7 @@
  * Bir projenin review geçmişini ve coverage skorlarını listeler.
  */
 
-import type { RuleResult } from '@covora/types'
+import type { ReviewOutcome, RuleResult } from '@covora/types'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 
 import type { ReviewRecord, StudioApi } from '../api/client.js'
@@ -78,6 +78,7 @@ export const ReviewsPanel = ({ api, projectKey }: ReviewsPanelProps): React.JSX.
   const [error, setError] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [results, setResults] = useState<Record<string, readonly RuleResult[]>>({})
+  const [outcomes, setOutcomes] = useState<Record<string, ReviewOutcome | null>>({})
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -107,6 +108,14 @@ export const ReviewsPanel = ({ api, projectKey }: ReviewsPanelProps): React.JSX.
         setResults((current) => ({ ...current, [reviewId]: fetched }))
       } catch {
         setResults((current) => ({ ...current, [reviewId]: [] }))
+      }
+    }
+    if (outcomes[reviewId] === undefined) {
+      try {
+        const outcome = await api.getReviewOutcome(reviewId)
+        setOutcomes((current) => ({ ...current, [reviewId]: outcome }))
+      } catch {
+        setOutcomes((current) => ({ ...current, [reviewId]: null }))
       }
     }
   }
@@ -169,6 +178,37 @@ export const ReviewsPanel = ({ api, projectKey }: ReviewsPanelProps): React.JSX.
             {openId === review.id && (
               <tr>
                 <td colSpan={8} className="audit-cell">
+                  {(() => {
+                    const outcome = outcomes[review.id]
+                    if (outcome === undefined || outcome === null) {
+                      return null
+                    }
+                    const { coverage, gate } = outcome
+                    return (
+                      <div className="review-report">
+                        <div className="review-report__cov">
+                          Coverage: kazanılan {coverage.earnedWeight.toFixed(1)} / toplam{' '}
+                          {coverage.totalWeight.toFixed(1)} · skor {coverage.score.toFixed(1)} ·
+                          seviye {coverage.level}
+                        </div>
+                        {coverage.failedBlockers.length > 0 && (
+                          <div className="review-report__blockers">
+                            Uyumsuz blocker: {coverage.failedBlockers.join(', ')}
+                          </div>
+                        )}
+                        {!gate.passed && gate.reasons.length > 0 && (
+                          <div className="review-report__reasons">
+                            <span className="review-report__reasons-title">Gate neden kaldı:</span>
+                            <ul>
+                              {gate.reasons.map((reason, index) => (
+                                <li key={index}>{reason}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                   {results[review.id] === undefined ? (
                     <span className="mono">Yükleniyor…</span>
                   ) : results[review.id]!.length === 0 ? (

@@ -34,6 +34,7 @@ import {
   getLatestReviewScore,
   getQueuePosition,
   getReviewResults,
+  getReviewOutcome,
   getRun,
   getRunInput,
   getRunLogs,
@@ -186,6 +187,7 @@ const start = async (): Promise<void> => {
         createdAt: review.createdAt.toISOString()
       })),
     listReviewResults: (reviewId) => getReviewResults(prisma, reviewId),
+    getReviewOutcome: (reviewId) => getReviewOutcome(prisma, reviewId),
     getDashboard: () => getDashboardSummary(prisma),
     listWebhooks: (projectId) => listWebhooks(prisma, projectId),
     getWebhook: (id) => findWebhookById(prisma, id),

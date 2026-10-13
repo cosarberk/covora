@@ -190,6 +190,8 @@ export interface StudioApi {
   listReviews(projectKey: string): Promise<readonly ReviewRecord[]>
   /** Bir review'ın kural bazında sonuçlarını getirir. */
   listReviewResults(reviewId: string): Promise<readonly RuleResult[]>
+  /** Bir review'ın tam coverage/gate dökümünü getirir (yoksa null). */
+  getReviewOutcome(reviewId: string): Promise<ReviewOutcome | null>
   upsertProject(key: string, name: string): Promise<ProjectSummary>
   listPacks(): Promise<readonly Pack[]>
   createPack(input: CreatePackInput): Promise<Pack>
@@ -466,6 +468,13 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
         await authFetch(`/reviews/${encodeURIComponent(reviewId)}/results`)
       )
       return data.results
+    },
+
+    async getReviewOutcome(reviewId) {
+      const data = await json<{ outcome: ReviewOutcome | null }>(
+        await authFetch(`/reviews/${encodeURIComponent(reviewId)}/outcome`)
+      )
+      return data.outcome
     },
 
     async upsertProject(key, name) {

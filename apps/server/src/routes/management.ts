@@ -259,6 +259,11 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
     return reply.send({ reviews: await deps.listRecentReviews(project.id) })
   })
 
+  app.get('/reviews/:id/outcome', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return reply.send({ outcome: await deps.getReviewOutcome(id) })
+  })
+
   app.get('/reviews/:id/results', async (request, reply) => {
     const { id } = request.params as { id: string }
     return reply.send({ results: await deps.listReviewResults(id) })
