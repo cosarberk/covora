@@ -22,6 +22,9 @@ export type IconName =
   | 'settings'
   | 'refresh'
   | 'logout'
+  | 'plug'
+  | 'copy'
+  | 'play'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   dashboard: (
@@ -103,7 +106,21 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4" />
       <path d="M10 12h9 M16 9l3 3-3 3" />
     </>
-  )
+  ),
+  plug: (
+    <>
+      <path d="M9 2v5 M15 2v5" />
+      <path d="M7 7h10v3a5 5 0 0 1-10 0Z" />
+      <path d="M12 15v7" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect x="9" y="9" width="11" height="11" rx="1.5" />
+      <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+    </>
+  ),
+  play: <path d="M7 4.5v15l12-7.5Z" />
 }
 
 /** Tek renkli ikon. */

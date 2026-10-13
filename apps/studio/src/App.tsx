@@ -18,6 +18,7 @@ import { CommandPalette, type Command } from './components/CommandPalette.js'
 import { Icon, type IconName } from './components/Icon.js'
 import { Splitter } from './components/Splitter.js'
 import { DashboardPanel } from './components/DashboardPanel.js'
+import { IngestGuide } from './components/IngestGuide.js'
 import { Login } from './components/Login.js'
 import { PacksPanel } from './components/PacksPanel.js'
 import { ProcessGraph, ProcessInspector, ProcessRunList } from './components/processes/regions.js'
@@ -33,13 +34,14 @@ import { WebhooksPanel } from './components/WebhooksPanel.js'
 const serverUrl = import.meta.env.VITE_COVORA_SERVER_URL ?? ''
 const defaultApi = createStudioApi({ baseUrl: serverUrl })
 
-type Tab = 'packs' | 'rules' | 'reviews' | 'webhooks' | 'settings'
+type Tab = 'packs' | 'rules' | 'reviews' | 'webhooks' | 'settings' | 'integration'
 type View = 'dashboard' | 'project' | 'providers' | 'packs' | 'processes'
 
 const PROJECT_TABS: readonly { readonly id: Tab; readonly icon: IconName; readonly label: string }[] = [
   { id: 'packs', icon: 'packages', label: 'Paketler' },
   { id: 'rules', icon: 'rules', label: 'Kurallar' },
   { id: 'reviews', icon: 'reviews', label: 'Review Geçmişi' },
+  { id: 'integration', icon: 'plug', label: 'Entegrasyon' },
   { id: 'webhooks', icon: 'webhook', label: 'Bildirimler' },
   { id: 'settings', icon: 'settings', label: 'Ayarlar' }
 ]
@@ -289,6 +291,14 @@ export const App = ({ api = defaultApi, initialUser, initialView }: AppProps = {
     }
     if (tab === 'reviews') {
       return <ReviewsPanel api={api} projectKey={selectedProject.key} />
+    }
+    if (tab === 'integration') {
+      return (
+        <IngestGuide
+          projectKey={selectedProject.key}
+          ingestToken={selectedProject.ingestToken}
+        />
+      )
     }
     if (tab === 'webhooks') {
       return <WebhooksPanel api={api} projectKey={selectedProject.key} />
