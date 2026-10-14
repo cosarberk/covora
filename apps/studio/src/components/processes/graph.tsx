@@ -196,7 +196,9 @@ const ResultNode = ({ data }: NodeProps): React.JSX.Element => {
   )
 }
 
-export const NODE_TYPES = { step: StepNode, input: InputNode, result: ResultNode, rule: RuleNode }
+// NOT: tip adları React Flow'un yerleşik adlarıyla (input/default/output/group)
+// çakışmamalı — çakışırsa node'a varsayılan beyaz kutu/çerçeve/150px basılır.
+export const NODE_TYPES = { step: StepNode, reviewInput: InputNode, result: ResultNode, rule: RuleNode }
 
 /** Grafik düzeni için kolon genişliği ve satır yüksekliği (px). */
 export const COL_W = 250
