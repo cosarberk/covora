@@ -321,7 +321,7 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     // Girdi
     list.push({
       id: 'input',
-      type: 'input',
+      type: 'reviewInput',
       position: at('input', 0, midY),
       data: {
         kind: run.kind,
