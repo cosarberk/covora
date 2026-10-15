@@ -186,9 +186,25 @@ const resolveLlm = async (
 
   const startedAt = Date.now()
   try {
-    const results = await provider.fillChecklist(input, rules.map(toChecklistItem))
+    const { results, trace } = await provider.fillChecklist(input, rules.map(toChecklistItem))
     const ms = Date.now() - startedAt
+    // Ham iz (şeffaflık): modele giden tam istem ve modelin döndürdüğü ham yanıt
+    // birebir loglanır. "sonuç döndürmedi" gibi durumların gerçek sebebi burada
+    // görülür (örn. model ruleId'yi yanlış döndürmüş ya da geçersiz JSON).
+    if (trace !== undefined) {
+      await sink.log('debug', `Modele gönderilen istem:\n${trace.prompt}`, 'llm')
+      await sink.log('debug', `Model ham yanıtı:\n${trace.rawResponse}`, 'llm')
+    }
     await sink.log('info', `AI yanıt verdi: ${results.length} sonuç (${(ms / 1000).toFixed(1)} sn)`, 'llm')
+    // Ham yanıtın "toparlanmış" (ayrıştırılmış) hali: her maddenin okunur sonucu.
+    const summary = results
+      .map((result) => {
+        const label = ruleById.get(result.ruleId)?.title ?? result.ruleId
+        const note = result.note !== undefined && result.note.length > 0 ? ` — ${result.note}` : ''
+        return `  • ${label} [${result.ruleId}]: ${outcomeLabel(result.outcome)}${note}`
+      })
+      .join('\n')
+    await sink.log('info', `Ayrıştırılmış sonuç:\n${summary}`, 'llm')
     for (const result of results) {
       const rule = ruleById.get(result.ruleId)
       const label = rule?.title ?? result.ruleId

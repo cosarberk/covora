@@ -21,8 +21,9 @@ import type { LlmProvider } from './provider.js'
 const passingProvider = (kind: 'ui' | 'code'): LlmProvider => ({
   kind,
   fillChecklist: vi.fn(
-    async (_input: ReviewInput, items: readonly ChecklistItem[]): Promise<readonly RuleResult[]> =>
-      items.map((item) => ({ ruleId: item.ruleId, outcome: 'pass' }))
+    async (_input: ReviewInput, items: readonly ChecklistItem[]) => ({
+      results: items.map((item): RuleResult => ({ ruleId: item.ruleId, outcome: 'pass' }))
+    })
   )
 })
 

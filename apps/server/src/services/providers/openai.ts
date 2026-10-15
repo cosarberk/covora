@@ -9,8 +9,8 @@
  * kesilmez; `timeoutMs` 0 ise süresiz beklenir).
  */
 
-import type { LlmProvider } from '@covora/core'
-import { postJson } from '@covora/provider-ollama'
+import type { FillChecklistResult, LlmProvider } from '@covora/core'
+import { postJson, reconcileChecklist } from '@covora/provider-ollama'
 import {
   checklistOutcomeSchema,
   type ChatMessage,
@@ -58,10 +58,19 @@ const systemPrompt = (kind: ReviewKind): string => {
   const subject = kind === 'ui' ? 'kullanıcı arayüzü ekran görüntüsünü' : 'kaynak kodu'
   const role = kind === 'ui' ? 'arayüz (UI)' : 'kod'
   return [
+    'DİL KURALI (EN ÖNEMLİSİ): Tüm "note" açıklamalarını MUTLAKA ve YALNIZCA',
+    'TÜRKÇE yaz. İngilizce tek kelime bile kullanma.',
     `Sen bir ${role} inceleme asistanısın.`,
     `Sana ${subject} ve bir kontrol listesi verilecek.`,
     'Her madde için yalnızca "pass", "partial" veya "fail" sonucunu ve kısa bir not döndür.',
     'Puan HESAPLAMA; sadece her maddeyi değerlendir.',
+    'ÇOK ÖNEMLİ — KURALLARA KESİNLİKLE UY:',
+    'Yalnızca sana verilen numaralı kontrol listesi maddelerini yanıtla; sonuç',
+    'sayısı madde sayısıyla TAM OLARAK aynı olmalı. Her sonucun "ruleId" alanı,',
+    'maddenin başındaki parantez içindeki kimlikle KARAKTER KARAKTER AYNI olmalı.',
+    'KENDİ kural adlarını (ör. "no-unused-vars", "no-console", "WCAG21_H1") ASLA',
+    'ÜRETME; madde EKLEME veya ÇIKARMA. Birden çok gözlemini TEK sonucun "note"',
+    'alanında birleştir. TÜM notları/açıklamaları TÜRKÇE yaz (İngilizce yazma).',
     'Yanıtı {"results":[{"ruleId","outcome","note"}]} JSON şemasına birebir uygun ver.'
   ].join(' ')
 }
@@ -78,11 +87,29 @@ const formatItems = (items: readonly ChecklistItem[]): string =>
 const toDataUrl = (screenshot: string): string =>
   screenshot.startsWith('data:') ? screenshot : `data:image/png;base64,${screenshot}`
 
+/**
+ * İçerik parçalarını log'a yazılabilir metne çevirir. Görüntüler (base64) çok
+ * büyük olduğundan içerik yerine yalnızca boyut yazılır; metin birebir korunur.
+ */
+const contentPartsToText = (parts: readonly ContentPart[]): string =>
+  parts
+    .map((part) =>
+      part.type === 'text'
+        ? part.text
+        : `[image_url: ${Math.round((part.image_url.url.length * 3) / 4 / 1024)} KB]`
+    )
+    .join('\n')
+
 const buildUserContent = (input: ReviewInput, items: readonly ChecklistItem[]): ContentPart[] => {
   const itemsBlock = formatItems(items)
+  // Küçük modeller dil talimatını system'de bazen atlıyor; user mesajında da yinele.
+  const trReminder = '\n\nÖNEMLİ: Tüm "note" açıklamalarını Türkçe yaz.'
   if (input.kind === 'ui') {
     return [
-      { type: 'text', text: `Aşağıdaki kontrol listesini ekran görüntüsüne göre doldur:\n\n${itemsBlock}` },
+      {
+        type: 'text',
+        text: `Aşağıdaki kontrol listesini ekran görüntüsüne göre doldur:\n\n${itemsBlock}${trReminder}`
+      },
       { type: 'image_url', image_url: { url: toDataUrl(input.screenshot) } }
     ]
   }
@@ -90,7 +117,7 @@ const buildUserContent = (input: ReviewInput, items: readonly ChecklistItem[]): 
   return [
     {
       type: 'text',
-      text: `Aşağıdaki kontrol listesini kaynak koda göre doldur:\n\n${itemsBlock}\n\nKaynak dosyalar:\n${filesBlock}`
+      text: `Aşağıdaki kontrol listesini kaynak koda göre doldur:\n\n${itemsBlock}\n\nKaynak dosyalar:\n${filesBlock}${trReminder}`
     }
   ]
 }
@@ -128,10 +155,12 @@ export const createOpenAiProvider = (config: OpenAiProviderConfig): LlmProvider 
   const endpoint = `${config.baseUrl.replace(/\/$/, '')}/chat/completions`
   return {
     kind: config.kind,
-    async fillChecklist(input, items) {
+    async fillChecklist(input, items): Promise<FillChecklistResult> {
       if (items.length === 0) {
-        return []
+        return { results: [] }
       }
+      const systemContent = systemPrompt(input.kind)
+      const userContent = buildUserContent(input, items)
       const data = await postJson(
         endpoint,
         {
@@ -139,23 +168,22 @@ export const createOpenAiProvider = (config: OpenAiProviderConfig): LlmProvider 
           temperature: 0,
           response_format: { type: 'json_object' },
           messages: [
-            { role: 'system', content: systemPrompt(input.kind) },
-            { role: 'user', content: buildUserContent(input, items) }
+            { role: 'system', content: systemContent },
+            { role: 'user', content: userContent }
           ]
         },
         { apiKey: config.apiKey ?? null, timeoutMs: config.timeoutMs ?? 0 }
       )
-      const resultsByRuleId = parseResults(openAiResponseSchema.parse(data).choices[0]!.message.content)
-      return items.map((item): RuleResult => {
-        const result = resultsByRuleId.get(item.ruleId)
-        return (
-          result ?? {
-            ruleId: item.ruleId,
-            outcome: 'fail',
-            note: 'Model bu madde için sonuç döndürmedi'
-          }
-        )
-      })
+      const rawResponse = openAiResponseSchema.parse(data).choices[0]!.message.content
+      const resultsByRuleId = parseResults(rawResponse)
+      const results = reconcileChecklist(items, resultsByRuleId)
+      return {
+        results,
+        trace: {
+          prompt: `### system\n${systemContent}\n\n### user\n${contentPartsToText(userContent)}`,
+          rawResponse
+        }
+      }
     }
   }
 }

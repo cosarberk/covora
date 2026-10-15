@@ -57,6 +57,31 @@ export const LOG_COLOR: Record<RunLogLine['level'], string> = {
 
 export const formatTime = (iso: string): string => new Date(iso).toLocaleTimeString('tr-TR')
 
+/**
+ * Log satırlarını panoya kopyalanabilir düz metne çevirir: her satır
+ * `HH:MM:SS [level] stepKey | mesaj` biçiminde, çok satırlı mesaj aynen korunur.
+ */
+export const logsToText = (lines: readonly RunLogLine[]): string =>
+  lines
+    .map((line) => {
+      const step = line.stepKey !== undefined ? ` ${line.stepKey}` : ''
+      return `${formatTime(line.at)} [${line.level}]${step} | ${line.message}`
+    })
+    .join('\n')
+
+/**
+ * Metni panoya kopyalar; başarı/başarısızlıkta kısa bir geri bildirim verir.
+ * `navigator.clipboard` yoksa (eski tarayıcı/insecure origin) sessizce false.
+ */
+export const copyToClipboard = async (text: string): Promise<boolean> => {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export const formatDuration = (from?: string, to?: string): string | null => {
   if (from === undefined) {
     return null
@@ -148,6 +173,8 @@ interface InputNodeData extends Record<string, unknown> {
   readonly kind: ReviewKind
   readonly thumb: string | null
   readonly fileCount: number | null
+  /** Code girdisinde dosya yolları (node içinde alt alta listelenir). */
+  readonly fileNames: readonly string[] | null
   /** Köken bir kaynağa (MR/PR/commit) bağlıysa node'da ipucu gösterilir. */
   readonly hasSource: boolean
   readonly selected: boolean
@@ -164,6 +191,14 @@ const InputNode = ({ data }: NodeProps): React.JSX.Element => {
         ) : (
           <span className="fnode__placeholder">ekran görüntüsü</span>
         )
+      ) : d.fileNames !== null && d.fileNames.length > 0 ? (
+        <ul className="fnode__files">
+          {d.fileNames.map((name) => (
+            <li key={name} className="fnode__file mono" title={name}>
+              {name}
+            </li>
+          ))}
+        </ul>
       ) : (
         <span className="fnode__placeholder">{d.fileCount ?? '?'} dosya</span>
       )}
@@ -192,13 +227,36 @@ const ResultNode = ({ data }: NodeProps): React.JSX.Element => {
         {d.level ?? '—'} ·{' '}
         {d.gatePassed === null ? '—' : d.gatePassed ? 'Gate geçti' : 'Gate kaldı'}
       </span>
+      <Handle type="source" position={Position.Right} className="fnode__handle" />
+    </div>
+  )
+}
+
+interface ReportNodeData extends Record<string, unknown> {
+  readonly ready: boolean
+  readonly selected: boolean
+}
+
+const ReportNode = ({ data }: NodeProps): React.JSX.Element => {
+  const d = data as ReportNodeData
+  return (
+    <div className={`fnode fnode--report${d.selected ? ' is-selected' : ''}`}>
+      <Handle type="target" position={Position.Left} className="fnode__handle" />
+      <span className="fnode__name">Rapor</span>
+      <span className="fnode__sub">{d.ready ? '↓ Markdown hazır' : 'bekliyor…'}</span>
     </div>
   )
 }
 
 // NOT: tip adları React Flow'un yerleşik adlarıyla (input/default/output/group)
 // çakışmamalı — çakışırsa node'a varsayılan beyaz kutu/çerçeve/150px basılır.
-export const NODE_TYPES = { step: StepNode, reviewInput: InputNode, result: ResultNode, rule: RuleNode }
+export const NODE_TYPES = {
+  step: StepNode,
+  reviewInput: InputNode,
+  result: ResultNode,
+  rule: RuleNode,
+  report: ReportNode
+}
 
 /** Grafik düzeni için kolon genişliği ve satır yüksekliği (px). */
 export const COL_W = 250
@@ -213,5 +271,5 @@ export const STATUS_STROKE: Record<StepStatus, string> = {
   cancelled: 'var(--border-strong)'
 }
 
-export type { StepNodeData, InputNodeData, ResultNodeData, RuleNodeData }
+export type { StepNodeData, InputNodeData, ResultNodeData, RuleNodeData, ReportNodeData }
 export type { Edge, Node }

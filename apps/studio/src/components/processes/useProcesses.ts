@@ -29,6 +29,7 @@ import { COL_W, ROW_H, STATUS_STROKE, formatDuration, type Edge, type Node } fro
 export type SelectedNode =
   | { readonly kind: 'input' }
   | { readonly kind: 'result' }
+  | { readonly kind: 'report' }
   | { readonly kind: 'step'; readonly key: string }
   | { readonly kind: 'rule'; readonly key: string }
 
@@ -152,7 +153,10 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     setLogs([])
     setInput(null)
     setReport(null)
-    setRules([])
+    // NOT: `rules` burada sıfırlanmaz. Kurallar run'a değil PROJEYE bağlı ve
+    // yalnızca `projectKey` değişince yeniden çekilir (aşağıdaki effect). Burada
+    // sıfırlarsak, aynı proje içinde başka/yeni run'a geçişte projectKey
+    // değişmediği için fetch tetiklenmez ve kural node'ları kaybolurdu.
     setSelected(null)
 
     const unsubscribe = api.streamRun(openRunId, (event) => {
@@ -329,9 +333,11 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     const R = detRules.length
     const L = llmRules.length
     const groupGap = R > 0 && L > 0 ? 56 : 0
-    const detY = detRules.map((_, i) => i * ROW_H)
-    const llmBase = R * ROW_H + groupGap
-    const llmY = llmRules.map((_, j) => llmBase + j * ROW_H)
+    // Deterministik kurallar merkezden YUKARI, AI kuralları merkezden AŞAĞI
+    // yayılır. Böylece iki grup birbirini aşağı itmez; det üstte, AI altta,
+    // merkez (girdi/sonuç hattı) etrafında dengeli durur.
+    const detY = detRules.map((_, i) => -groupGap / 2 - (R - i) * ROW_H)
+    const llmY = llmRules.map((_, j) => groupGap / 2 + (j + 1) * ROW_H)
     const allY = [...detY, ...llmY]
     const minY = allY.length > 0 ? Math.min(...allY) : 0
     const maxY = allY.length > 0 ? Math.max(...allY) : 0
@@ -362,6 +368,10 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
         kind: run.kind,
         thumb,
         fileCount: input !== null && input.input.kind === 'code' ? input.input.files.length : null,
+        fileNames:
+          input !== null && input.input.kind === 'code'
+            ? input.input.files.map((file) => file.path)
+            : null,
         hasSource: run.origin?.refUrl !== undefined,
         selected: selected?.kind === 'input'
       }
@@ -447,6 +457,18 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
       }
     })
 
+    // Rapor (markdown özet) — run bittiğinde içerik hazırdır.
+    list.push({
+      id: 'report',
+      type: 'report',
+      position: { x: 9 * COL_W, y: midY },
+      data: {
+        ready:
+          run.status === 'succeeded' || run.status === 'degraded' || run.status === 'failed',
+        selected: selected?.kind === 'report'
+      }
+    })
+
     return list
   }, [run, input, thumb, selected, detRules, llmRules, outcomeByKey, tick])
 
@@ -510,6 +532,7 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     list.push(mk('gate', 'persist', 'gate', 'persist'))
     list.push(mk('persist', 'notify', 'persist', 'notify'))
     list.push(mk('notify', 'result', 'notify', 'notify'))
+    list.push(mk('result', 'report', 'notify', 'notify'))
     return list
   }, [run, stepByKey, detRules, llmRules])
 
@@ -530,6 +553,8 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
       setSelected({ kind: 'input' })
     } else if (id === 'result') {
       setSelected({ kind: 'result' })
+    } else if (id === 'report') {
+      setSelected({ kind: 'report' })
     } else if (id.startsWith('rule:')) {
       setSelected({ kind: 'rule', key: id.slice('rule:'.length) })
     } else {

@@ -12,7 +12,7 @@
  */
 
 import type { User } from '@covora/types'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createStudioApi, type ProjectSummary, type StudioApi } from './api/client.js'
 import { CommandPalette, type Command } from './components/CommandPalette.js'
@@ -25,7 +25,7 @@ import { ConfirmHost, ToastHost, confirmDialog, toast } from './components/overl
 import { PacksPanel } from './components/PacksPanel.js'
 import { ProcessGraph, ProcessInspector, ProcessRunList } from './components/processes/regions.js'
 import { useProcesses } from './components/processes/useProcesses.js'
-import { LOG_COLOR, formatTime } from './components/processes/graph.js'
+import { LOG_COLOR, copyToClipboard, formatTime, logsToText } from './components/processes/graph.js'
 import { ProjectPacksPanel } from './components/ProjectPacksPanel.js'
 import { ProvidersPanel } from './components/ProvidersPanel.js'
 import { ReviewsPanel } from './components/ReviewsPanel.js'
@@ -181,6 +181,34 @@ export const App = ({
 
   // Süreçler durumu (yalnızca o görünüm aktifken ağ/akış yapar).
   const proc = useProcesses(api, view === 'processes')
+
+  // Konsol otomatik kaydırma: yeni log geldikçe (ve run ilk açıldığında konsol
+  // zaten doluyken) her zaman dibe kaydır. rAF ile layout/paint sonrası çalışır
+  // ki scrollHeight güncel olsun; aksi halde ilk açılışta top'ta takılı kalıyordu.
+  const consoleBodyRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = consoleBodyRef.current
+    if (el === null) {
+      return
+    }
+    const id = requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight
+    })
+    return () => cancelAnimationFrame(id)
+  }, [proc.logs, proc.openRunId])
+
+  // Konsoldaki tüm logları panoya kopyalar.
+  const copyConsoleLogs = useCallback((): void => {
+    if (proc.logs.length === 0) {
+      toast.info('Kopyalanacak log yok')
+      return
+    }
+    void copyToClipboard(logsToText(proc.logs)).then((ok) =>
+      ok
+        ? toast.success(`${proc.logs.length} log satırı kopyalandı`)
+        : toast.error('Kopyalanamadı (pano erişimi yok)')
+    )
+  }, [proc.logs])
 
   const openProject = useCallback((key: string): void => {
     setSelected(key)
@@ -628,8 +656,19 @@ export const App = ({
             <div className="area__head">
               <Icon name="reviews" size={13} />
               <span className="area__title">Konsol</span>
+              {view === 'processes' && proc.openRunId !== null && proc.logs.length > 0 && (
+                <button
+                  type="button"
+                  className="icon-button area__head-action"
+                  title="Tüm logları kopyala"
+                  aria-label="Tüm logları kopyala"
+                  onClick={copyConsoleLogs}
+                >
+                  <Icon name="copy" size={13} />
+                </button>
+              )}
             </div>
-            <div className="area__body console-body">
+            <div className="area__body console-body" ref={consoleBodyRef}>
               {view === 'processes' && proc.openRunId !== null ? (
                 proc.logs.length === 0 ? (
                   <div className="cline cline__dim">Log bekleniyor…</div>
@@ -640,7 +679,12 @@ export const App = ({
                       {line.stepKey !== undefined && (
                         <span className="cline__step">{line.stepKey}</span>
                       )}
-                      <span style={{ color: LOG_COLOR[line.level] }}>{line.message}</span>
+                      <span
+                        className="cline__msg"
+                        style={{ color: LOG_COLOR[line.level] }}
+                      >
+                        {line.message}
+                      </span>
                     </div>
                   ))
                 )

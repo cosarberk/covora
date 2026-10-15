@@ -40,36 +40,72 @@ export const asDeterministicChecker =
       : { ruleId: rule.id, outcome: result.outcome }
   }
 
+/** Desene uyan tek bir satır eşleşmesi: dosya yolu, 1-tabanlı satır, satır metni. */
+interface LineHit {
+  readonly path: string
+  readonly line: number
+  readonly text: string
+}
+
+/** Note'ta gösterilecek en fazla eşleşme; fazlası özetlenir (log şişmesin). */
+const MAX_HITS = 10
+
+/** Uzun satırları note için kısaltır. */
+const truncate = (text: string, max = 120): string =>
+  text.length > max ? `${text.slice(0, max)}…` : text
+
 /**
- * Verilen desene uyan satır içeren dosyaların yollarını toplayan yardımcı.
+ * Verilen desene uyan satırları (dosya yolu + satır no + satır metni) toplar.
+ * Dosya yolu yerine satır düzeyinde eşleşme döndürür ki note'ta "nerede"
+ * bilgisi (path:line → satır) görünsün.
  *
  * @param files - Kaynak dosyalar.
- * @param pattern - Aranan desen.
- * @returns Eşleşen dosya yolları.
+ * @param pattern - Aranan desen (global olmamalı).
+ * @returns Eşleşen satırların listesi.
  */
-const filesMatching = (files: readonly CodeFile[], pattern: RegExp): string[] =>
-  files.filter((file) => pattern.test(file.content)).map((file) => file.path)
+const linesMatching = (files: readonly CodeFile[], pattern: RegExp): LineHit[] => {
+  const hits: LineHit[] = []
+  for (const file of files) {
+    const lines = file.content.split(/\r?\n/)
+    for (let i = 0; i < lines.length; i++) {
+      const text = lines[i]!
+      if (pattern.test(text)) {
+        hits.push({ path: file.path, line: i + 1, text: text.trim() })
+      }
+    }
+  }
+  return hits
+}
+
+/** Eşleşmeleri `path:line → satır` biçiminde, en fazla {@link MAX_HITS} tane listeler. */
+const formatHits = (hits: readonly LineHit[]): string => {
+  const shown = hits
+    .slice(0, MAX_HITS)
+    .map((hit) => `${hit.path}:${hit.line} → ${truncate(hit.text)}`)
+  const extra = hits.length > MAX_HITS ? ` (+${hits.length - MAX_HITS} tane daha)` : ''
+  return `${shown.join(' | ')}${extra}`
+}
 
 /** Kodda TODO/FIXME/XXX işareti bulunmamalı. */
 export const noTodoChecker: CodeChecker = (files) => {
-  const hits = filesMatching(files, /\b(TODO|FIXME|XXX)\b/)
+  const hits = linesMatching(files, /\b(TODO|FIXME|XXX)\b/)
   return hits.length === 0
     ? { outcome: 'pass' }
-    : { outcome: 'fail', note: `TODO/FIXME işareti: ${hits.join(', ')}` }
+    : { outcome: 'fail', note: `${hits.length} TODO/FIXME işareti — ${formatHits(hits)}` }
 }
 
 /** Üretim kodunda `console.*` çağrısı bulunmamalı. */
 export const noConsoleChecker: CodeChecker = (files) => {
-  const hits = filesMatching(files, /\bconsole\.(log|debug|info|warn|error)\s*\(/)
+  const hits = linesMatching(files, /\bconsole\.(log|debug|info|warn|error)\s*\(/)
   return hits.length === 0
     ? { outcome: 'pass' }
-    : { outcome: 'fail', note: `console çağrısı: ${hits.join(', ')}` }
+    : { outcome: 'fail', note: `${hits.length} console çağrısı — ${formatHits(hits)}` }
 }
 
 /** Kodda gömülü (hardcoded) http(s) adresi bulunmamalı. */
 export const noHardcodedUrlChecker: CodeChecker = (files) => {
-  const hits = filesMatching(files, /https?:\/\/[^\s"'`]+/)
+  const hits = linesMatching(files, /https?:\/\/[^\s"'`]+/)
   return hits.length === 0
     ? { outcome: 'pass' }
-    : { outcome: 'fail', note: `Gömülü URL: ${hits.join(', ')}` }
+    : { outcome: 'fail', note: `${hits.length} gömülü URL — ${formatHits(hits)}` }
 }

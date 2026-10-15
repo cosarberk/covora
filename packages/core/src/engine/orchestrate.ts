@@ -97,7 +97,9 @@ export const runReview = async (options: RunReviewOptions): Promise<ReviewOutcom
   )
 
   const llmResults =
-    llmRules.length > 0 ? await provider.fillChecklist(input, llmRules.map(toChecklistItem)) : []
+    llmRules.length > 0
+      ? (await provider.fillChecklist(input, llmRules.map(toChecklistItem))).results
+      : []
 
   const results: RuleResult[] = [...deterministicResults, ...llmResults]
   const coverage = computeCoverage(relevantRules, results, config)
