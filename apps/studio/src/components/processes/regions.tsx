@@ -197,6 +197,23 @@ const OriginBlock = ({ origin }: { readonly origin: ReviewOrigin }): React.JSX.E
   )
 }
 
+/** Code girdisinde bir dosyanın içeriğini satır numaralı, salt-okunur gösterir. */
+const CodeViewer = ({ content }: { readonly content: string }): React.JSX.Element => {
+  const lines = content.split('\n')
+  return (
+    <pre className="code-view">
+      <code>
+        {lines.map((line, index) => (
+          <span key={index} className="code-view__line">
+            <span className="code-view__ln">{index + 1}</span>
+            <span className="code-view__txt">{line === '' ? ' ' : line}</span>
+          </span>
+        ))}
+      </code>
+    </pre>
+  )
+}
+
 /** Özellikler: seçili node'un detayı (girdi / adım / sonuç) ya da run özeti. */
 export const ProcessInspector = ({ proc }: { readonly proc: ProcessesState }): React.JSX.Element => {
   const { run, selected, logs, input, thumb, report, stepByKey, rules } = proc
@@ -276,19 +293,21 @@ export const ProcessInspector = ({ proc }: { readonly proc: ProcessesState }): R
         </div>
       )
     }
+    const files = input.input.files
     return (
       <div className="inspector">
         <dl className="kv">
           <dt>Tür</dt>
-          <dd>Code ({input.input.files.length} dosya)</dd>
+          <dd>Code ({files.length} dosya)</dd>
         </dl>
-        <ul className="file-list">
-          {input.input.files.map((file) => (
-            <li key={file.path} className="mono">
-              {file.path}
-            </li>
+        <div className="code-files">
+          {files.map((file) => (
+            <details key={file.path} className="code-file" open={files.length === 1}>
+              <summary className="code-file__path mono">{file.path}</summary>
+              <CodeViewer content={file.content} />
+            </details>
           ))}
-        </ul>
+        </div>
         {run.origin !== undefined && <OriginBlock origin={run.origin} />}
       </div>
     )
