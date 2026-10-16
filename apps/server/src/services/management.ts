@@ -58,6 +58,14 @@ export interface ProjectRecord {
   readonly hasGitToken: boolean
 }
 
+/**
+ * Covora'nın depoyu kendisi çekip review'ı kuyruğa alması sonucu. `ok:false`
+ * iş kuralı hatasıdır (proje/git yok); clone/çekme hataları ise fırlatılır.
+ */
+export type PullReviewOutcome =
+  | { readonly ok: true; readonly runId: string; readonly queuePosition?: number }
+  | { readonly ok: false; readonly reason: 'no-project' | 'no-git' }
+
 /** Review geçmişi okuma modeli (sonuç ayrıntısı olmadan özet). */
 export interface ReviewRecord {
   readonly id: string
@@ -163,4 +171,10 @@ export interface ManagementDeps {
   ) => Promise<Integration | null>
   /** Bir bağlantıyı siler. */
   readonly deleteIntegration: (id: string) => Promise<void>
+  /**
+   * Projenin kayıtlı git bağlantısıyla depoyu çeker ve bir code review'ı kuyruğa
+   * alır (dışarıdan dosya push etmeden). Proje/git yoksa `ok:false` döner; çekme
+   * hatası fırlatılır.
+   */
+  readonly pullReview: (key: string, ref?: string) => Promise<PullReviewOutcome>
 }

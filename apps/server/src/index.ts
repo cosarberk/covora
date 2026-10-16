@@ -75,6 +75,8 @@ import type { ReviewRoutesDeps } from './routes/reviews.js'
 import type { RunRoutesDeps } from './routes/runs.js'
 import { createChatSender } from './services/chat-factory.js'
 import { createRunEventBus } from './services/events.js'
+import { cloneAndCollect } from './services/git-source.js'
+import { enqueueReview } from './services/review.service.js'
 import type { ManagementDeps, ProjectRecord } from './services/management.js'
 import { dispatchReviewNotifications } from './services/notifications.js'
 import { createProviderResolver } from './services/provider-factory.js'
@@ -227,7 +229,45 @@ const start = async (): Promise<void> => {
     listIntegrations: () => listIntegrations(prisma),
     createIntegration: (input) => createIntegration(prisma, input),
     updateIntegration: (id, patch) => updateIntegration(prisma, id, patch),
-    deleteIntegration: (id) => deleteIntegration(prisma, id)
+    deleteIntegration: (id) => deleteIntegration(prisma, id),
+    pullReview: async (key, ref) => {
+      const project = await findProjectByKey(prisma, key)
+      if (project === null) {
+        return { ok: false, reason: 'no-project' }
+      }
+      if (project.gitRepoUrl === null || project.gitRepoUrl.length === 0) {
+        return { ok: false, reason: 'no-git' }
+      }
+      const providerParsed = gitProviderSchema.safeParse(project.gitProvider)
+      const { files, commitSha, branch } = await cloneAndCollect(
+        {
+          provider: providerParsed.success ? providerParsed.data : null,
+          repoUrl: project.gitRepoUrl,
+          token: project.gitToken
+        },
+        ref !== undefined ? { ref } : {}
+      )
+      const enqueued = await enqueueReview(
+        {
+          findProjectByKey: (k) => findProjectByKey(prisma, k),
+          createRun: (input) => createRun(prisma, input),
+          getQueuePosition: (runId) => getQueuePosition(prisma, runId),
+          getRun: (runId) => getRun(prisma, runId),
+          bus
+        },
+        {
+          projectKey: key,
+          codeHash: commitSha,
+          input: { kind: 'code', files },
+          origin: { repoUrl: project.gitRepoUrl, branch, commitSha }
+        }
+      )
+      return {
+        ok: true,
+        runId: enqueued.runId,
+        ...(enqueued.queuePosition !== undefined ? { queuePosition: enqueued.queuePosition } : {})
+      }
+    }
   }
 
   const chatDeps: ChatDeps = {

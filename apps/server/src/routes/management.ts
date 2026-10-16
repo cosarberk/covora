@@ -28,6 +28,11 @@ const upsertProjectBodySchema = z.object({
   gitToken: z.string().min(1).nullable().optional()
 })
 
+const pullReviewBodySchema = z.object({
+  /** Çekilecek dal (verilmezse deponun varsayılan dalı). */
+  ref: z.string().min(1).optional()
+})
+
 const createRuleBodySchema = z.object({
   key: z.string().min(1),
   title: z.string().min(1),
@@ -124,6 +129,35 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
   })
 
   app.get('/projects', async () => ({ projects: await deps.listProjects() }))
+
+  // Covora depoyu kendisi çeker (kayıtlı git bağlantısıyla) ve review'ı kuyruğa alır.
+  app.post('/projects/:key/pull-review', async (request, reply) => {
+    const { key } = request.params as { key: string }
+    const parsed = pullReviewBodySchema.safeParse(request.body ?? {})
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
+    }
+    try {
+      const result = await deps.pullReview(
+        key,
+        ...(parsed.data.ref !== undefined ? ([parsed.data.ref] as const) : ([] as const))
+      )
+      if (!result.ok) {
+        return result.reason === 'no-project'
+          ? reply.status(404).send({ error: 'Proje bulunamadı' })
+          : reply.status(400).send({ error: 'Projede git bağlantısı tanımlı değil' })
+      }
+      return reply.status(202).send({
+        runId: result.runId,
+        status: 'queued',
+        ...(result.queuePosition !== undefined ? { queuePosition: result.queuePosition } : {})
+      })
+    } catch (error) {
+      return reply
+        .status(502)
+        .send({ error: error instanceof Error ? error.message : 'Depo çekilemedi' })
+    }
+  })
 
   app.delete('/projects/:key', async (request, reply) => {
     const { key } = request.params as { key: string }

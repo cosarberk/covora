@@ -91,6 +91,9 @@ export const App = ({
   const [newGitProvider, setNewGitProvider] = useState<GitProvider | ''>('')
   const [newGitRepoUrl, setNewGitRepoUrl] = useState('')
   const [newGitToken, setNewGitToken] = useState('')
+  const [pullKey, setPullKey] = useState<string | null>(null)
+  const [pullRef, setPullRef] = useState('')
+  const [pulling, setPulling] = useState(false)
   const [copied, setCopied] = useState(false)
   const [cmdkOpen, setCmdkOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
@@ -259,6 +262,25 @@ export const App = ({
     }
   }
 
+  const startPull = async (): Promise<void> => {
+    if (pullKey === null) {
+      return
+    }
+    setPulling(true)
+    try {
+      const ref = pullRef.trim()
+      const result = await api.pullReview(pullKey, ref.length > 0 ? ref : undefined)
+      toast.success(`Depo çekildi, review kuyruğa alındı (#${result.runId.slice(-6)})`)
+      setPullKey(null)
+      setPullRef('')
+      setView('processes')
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'Depo çekilemedi')
+    } finally {
+      setPulling(false)
+    }
+  }
+
   const removeProject = async (key: string): Promise<void> => {
     const ok = await confirmDialog({
       title: 'Projeyi sil',
@@ -360,6 +382,18 @@ export const App = ({
                 </button>
                 <div className="projcard__foot">
                   <button type="button" className="link-button" onClick={() => openProject(project.key)}>Aç</button>
+                  {project.gitRepoUrl !== null && (
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => {
+                        setPullRef('')
+                        setPullKey(project.key)
+                      }}
+                    >
+                      Depodan review
+                    </button>
+                  )}
                   <button type="button" className="link-button link-button--danger" onClick={() => void removeProject(project.key)}>Sil</button>
                 </div>
               </div>
@@ -418,6 +452,45 @@ export const App = ({
                       Vazgeç
                     </button>
                     <button className="button" type="submit">Oluştur</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+          {pullKey !== null && (
+            <div className="modal-backdrop" onClick={() => !pulling && setPullKey(null)}>
+              <div className="modal" onClick={(event) => event.stopPropagation()}>
+                <div className="modal__title">Depodan review başlat</div>
+                <div className="modal__msg">
+                  Covora, <b>{pullKey}</b> projesinin kayıtlı git bağlantısıyla depoyu kendisi
+                  çekip bir code review kuyruğa alır.
+                </div>
+                <form
+                  className="modal__form"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void startPull()
+                  }}
+                >
+                  <input
+                    className="input input--sm"
+                    placeholder="dal (boş bırakılırsa varsayılan dal)"
+                    value={pullRef}
+                    onChange={(event) => setPullRef(event.target.value)}
+                    autoFocus
+                  />
+                  <div className="modal__actions">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setPullKey(null)}
+                      disabled={pulling}
+                    >
+                      Vazgeç
+                    </button>
+                    <button className="button" type="submit" disabled={pulling}>
+                      {pulling ? 'Çekiliyor…' : 'Başlat'}
+                    </button>
                   </div>
                 </form>
               </div>

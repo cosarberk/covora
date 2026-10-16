@@ -10,9 +10,10 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm build
 
 FROM node:22-slim AS runtime
-# Prisma query engine'i için OpenSSL 3 gereklidir
+# Prisma query engine'i için OpenSSL 3; depoyu covora'nın kendisi çekebilmesi
+# için git (operatörün ayrıca kurmasına gerek yok, image'a gömülüdür).
 RUN corepack enable && apt-get update \
-  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && apt-get install -y --no-install-recommends openssl ca-certificates git \
   && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 WORKDIR /app

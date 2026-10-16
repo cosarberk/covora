@@ -178,6 +178,11 @@ export interface StudioApi {
   deleteProject(key: string): Promise<void>
   /** Projenin ingest token'ını yeniden üretir; yeni token'ı döner. */
   rotateIngestToken(key: string): Promise<{ readonly ingestToken: string }>
+  /**
+   * Covora'nın projenin kayıtlı git bağlantısıyla depoyu kendisi çekip bir code
+   * review'ı kuyruğa almasını tetikler. Opsiyonel dal verilebilir.
+   */
+  pullReview(key: string, ref?: string): Promise<{ readonly runId: string; readonly queuePosition?: number }>
   listProviders(): Promise<readonly ProviderConfig[]>
   createProvider(input: CreateProviderInput): Promise<ProviderConfig>
   activateProvider(id: string): Promise<void>
@@ -355,6 +360,15 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
     async rotateIngestToken(key) {
       return json<{ ingestToken: string }>(
         await postJson(`/projects/${encodeURIComponent(key)}/rotate-token`, {})
+      )
+    },
+
+    async pullReview(key, ref) {
+      return json<{ runId: string; queuePosition?: number }>(
+        await postJson(
+          `/projects/${encodeURIComponent(key)}/pull-review`,
+          ref !== undefined && ref.length > 0 ? { ref } : {}
+        )
       )
     },
 
