@@ -13,9 +13,10 @@ import {
   getRun,
   linkReview,
   saveReview,
+  saveRulesSnapshot,
   type EffectiveConfig
 } from '@covora/db'
-import { reviewInputSchema, type ReviewKind, type Rule } from '@covora/types'
+import { reviewInputSchema, type ManagementRule, type ReviewKind, type Rule } from '@covora/types'
 import type { PrismaClient } from '@covora/db'
 
 import type { RunEventBus } from './events.js'
@@ -30,6 +31,11 @@ export interface WorkerDeps {
   readonly resolveProvider: (kind: ReviewKind) => Promise<LlmProvider>
   /** Projenin etkin kurallarını getirir. */
   readonly listEnabledRules: (projectId: string, kind: ReviewKind) => Promise<readonly Rule[]>
+  /**
+   * O türe ait TÜM kuralları (etkin + pasif) yönetim modeli olarak getirir —
+   * run'a snapshot yazmak için. Geçmiş akış bu snapshot'tan çizilir.
+   */
+  readonly listRuleSnapshot: (projectId: string, kind: ReviewKind) => Promise<readonly ManagementRule[]>
   /** Projenin etkin yapılandırmasını getirir. */
   readonly getEffectiveConfig: (projectId: string) => Promise<EffectiveConfig>
   /** Aynı tür için son review skorunu getirir (regresyon karşılaştırması). */
@@ -85,10 +91,13 @@ export const startWorker = (deps: WorkerDeps): Worker => {
     const input = parsed.data
 
     try {
-      const [rules, config] = await Promise.all([
+      const [rules, config, ruleSnapshot] = await Promise.all([
         deps.listEnabledRules(run.projectId, run.kind),
-        deps.getEffectiveConfig(run.projectId)
+        deps.getEffectiveConfig(run.projectId),
+        deps.listRuleSnapshot(run.projectId, run.kind)
       ])
+      // Kuralların o anki halini run'a sabitle; geçmiş akış/rapor bunu kullanır.
+      await saveRulesSnapshot(deps.prisma, run.id, ruleSnapshot)
       const provider = await deps.resolveProvider(run.kind)
       const previousScore = await deps.getLatestScore(run.projectId, run.kind)
 

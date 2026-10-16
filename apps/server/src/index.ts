@@ -112,6 +112,8 @@ const start = async (): Promise<void> => {
     bus,
     resolveProvider,
     listEnabledRules: (projectId, kind) => listEnabledRules(prisma, projectId, kind),
+    listRuleSnapshot: async (projectId, kind) =>
+      (await listManagementRules(prisma, projectId)).filter((rule) => rule.kind === kind),
     getEffectiveConfig: (projectId) => getEffectiveConfig(prisma, projectId),
     getLatestScore: (projectId, kind) => getLatestReviewScore(prisma, projectId, kind),
     notify: (payload) => {

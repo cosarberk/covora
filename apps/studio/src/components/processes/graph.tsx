@@ -134,6 +134,8 @@ interface RuleNodeData extends Record<string, unknown> {
   readonly evaluation: 'deterministic' | 'llm'
   readonly severity: Severity
   readonly weight: number
+  /** Kural etkin mi; pasif kurallar akışta soluk gösterilir. */
+  readonly enabled: boolean
   /** Nihai sonuç (rapor geldiğinde); henüz yoksa null. */
   readonly outcome: RuleResult['outcome'] | null
   /** Üst adım çalışıyor mu (neon efekti). */
@@ -146,12 +148,15 @@ const RuleNode = ({ data }: NodeProps): React.JSX.Element => {
   const state =
     d.outcome !== null ? `fnode--rule-${d.outcome}` : d.running ? 'fnode--running' : 'fnode--rule-idle'
   return (
-    <div className={`fnode fnode--rule ${state}${d.selected ? ' is-selected' : ''}`}>
+    <div
+      className={`fnode fnode--rule ${state}${d.enabled ? '' : ' fnode--disabled'}${d.selected ? ' is-selected' : ''}`}
+    >
       <Handle type="target" position={Position.Left} className="fnode__handle" />
       <span className="fnode__rtop">
         <span className={`fnode__tag fnode__tag--${d.evaluation}`}>
           {d.evaluation === 'llm' ? 'AI' : 'DET'}
         </span>
+        {!d.enabled && <span className="fnode__passive">PASİF</span>}
         {d.severity === 'blocker' && <span className="fnode__blocker">BLOCKER</span>}
         <span className="fnode__weight">ağ. {d.weight}</span>
       </span>

@@ -199,6 +199,10 @@ model ReviewRun {
   input      Json
   /// Review'u tetikleyen köken metadata'sı (source/repoUrl/refUrl/branch/commit/actor). Opsiyonel; pipeline/CLI doldurur.
   origin     Json?
+  /// Run çalışırken o türe ait kuralların anlık görüntüsü (title/evaluation/
+  /// severity/weight/enabled). Geçmiş akış, güncel kurallar yerine bunu çizer;
+  /// böylece kural sonradan açılıp kapatılsa/değişse bile geçmiş aynen korunur.
+  rulesSnapshot Json?
   /// Başarıyla üretilen sonuç kaydı (tamamlanınca bağlanır).
   reviewId   String?    @unique
   review     Review?    @relation(fields: [reviewId], references: [id], onDelete: SetNull)

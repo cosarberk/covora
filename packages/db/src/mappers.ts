@@ -6,6 +6,7 @@
 
 import {
   coverageConfigSchema,
+  managementRuleSchema,
   reviewOriginSchema,
   userRoleSchema,
   webhookEventSchema,
@@ -203,6 +204,18 @@ const originField = (raw: unknown): { readonly origin?: ReviewOrigin } => {
   return origin !== undefined ? { origin } : {}
 }
 
+/**
+ * Saklanan `rulesSnapshot` JSON'ını doğrular. Geçersiz/boş ise alanı atlar
+ * (spread için boş nesne) — eski kayıtlar güncel kurallara düşsün diye.
+ */
+const rulesSnapshotField = (raw: unknown): { readonly rulesSnapshot?: ManagementRule[] } => {
+  if (raw === null || raw === undefined) {
+    return {}
+  }
+  const parsed = managementRuleSchema.array().safeParse(raw)
+  return parsed.success && parsed.data.length > 0 ? { rulesSnapshot: parsed.data } : {}
+}
+
 export const toReviewRun = (
   run: PrismaReviewRun,
   projectKey: string,
@@ -226,7 +239,8 @@ export const toReviewRun = (
   gatePassed: review?.gatePassed ?? null,
   delta: run.delta,
   ...(run.error !== null ? { error: run.error } : {}),
-  ...originField(run.origin)
+  ...originField(run.origin),
+  ...rulesSnapshotField(run.rulesSnapshot)
 })
 
 /** Prisma run kaydını (bağlı review özetiyle) liste satırına dönüştürür. */

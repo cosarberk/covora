@@ -297,10 +297,18 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     [input]
   )
 
+  // Akışın/raporun kaynağı: run bir snapshot taşıyorsa (çalıştığı andaki kural
+  // hali) onu kullan; yoksa (eski kayıt / henüz başlamamış run) güncel kurallara
+  // düş. Böylece geçmiş run, kural sonradan açılıp kapatılsa bile aynen korunur.
+  const effectiveRules = useMemo<readonly ManagementRule[]>(
+    () => run?.rulesSnapshot ?? rules,
+    [run, rules]
+  )
+
   // Bu run'ın türüne ait kurallar, değerlendirme tipine göre ayrılmış.
   const relevantRules = useMemo(
-    () => (runKind === null ? [] : rules.filter((rule) => rule.kind === runKind)),
-    [rules, runKind]
+    () => (runKind === null ? [] : effectiveRules.filter((rule) => rule.kind === runKind)),
+    [effectiveRules, runKind]
   )
   const detRules = useMemo(
     () => relevantRules.filter((rule) => rule.evaluation === 'deterministic'),
@@ -421,6 +429,7 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
           evaluation: rule.evaluation,
           severity: rule.severity,
           weight: rule.weight,
+          enabled: rule.enabled,
           outcome: outcomeByKey.get(rule.key) ?? null,
           running: detStep?.status === 'running',
           selected: selected?.kind === 'rule' && selected.key === rule.key
@@ -437,6 +446,7 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
           evaluation: rule.evaluation,
           severity: rule.severity,
           weight: rule.weight,
+          enabled: rule.enabled,
           outcome: outcomeByKey.get(rule.key) ?? null,
           running: llmStep?.status === 'running',
           selected: selected?.kind === 'rule' && selected.key === rule.key
@@ -499,6 +509,11 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
       animated: running(srcKey) || running(tgtKey),
       style: { stroke: strokeFor(srcKey), strokeWidth: 2 }
     })
+    // Pasif kuralın okları: tam görünür kalır ama yeşil değil, nötr gri; animasyonsuz.
+    const ruleEdge = (edge: Edge, ruleEnabled: boolean): Edge =>
+      ruleEnabled
+        ? edge
+        : { ...edge, animated: false, style: { stroke: 'var(--border-strong)', strokeWidth: 2 } }
 
     const list: Edge[] = []
     const hasDet = run.steps.some((s) => s.key === 'deterministic')
@@ -511,8 +526,9 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
         list.push(mk('deterministic', 'coverage', 'deterministic', 'coverage'))
       }
       for (const rule of detRules) {
-        list.push(mk('deterministic', ruleNodeId(rule.key), 'deterministic', 'deterministic'))
-        list.push(mk(ruleNodeId(rule.key), 'coverage', 'deterministic', 'coverage'))
+        const rid = ruleNodeId(rule.key)
+        list.push(ruleEdge(mk('deterministic', rid, 'deterministic', 'deterministic'), rule.enabled))
+        list.push(ruleEdge(mk(rid, 'coverage', 'deterministic', 'coverage'), rule.enabled))
       }
     }
     if (hasLlm) {
@@ -521,8 +537,9 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
         list.push(mk('llm', 'coverage', 'llm', 'coverage'))
       }
       for (const rule of llmRules) {
-        list.push(mk('llm', ruleNodeId(rule.key), 'llm', 'llm'))
-        list.push(mk(ruleNodeId(rule.key), 'coverage', 'llm', 'coverage'))
+        const rid = ruleNodeId(rule.key)
+        list.push(ruleEdge(mk('llm', rid, 'llm', 'llm'), rule.enabled))
+        list.push(ruleEdge(mk(rid, 'coverage', 'llm', 'coverage'), rule.enabled))
       }
     }
     if (!hasDet && !hasLlm) {

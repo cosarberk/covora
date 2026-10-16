@@ -1399,11 +1399,30 @@ img {
   border-radius: 4px;
   padding: 0 4px;
 }
+.fnode__passive {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+}
 .fnode__weight {
   font-size: 10px;
   color: var(--text-faint);
   margin-left: auto;
   font-variant-numeric: tabular-nums;
+}
+/* Pasif (enabled=false) kural kartı: akışta soluk ve griye kaymış görünür.
+   İki-sınıflı seçici, tek-sınıflı `.fnode--rule-*` opaklıklarını ezmek için. */
+.fnode--rule.fnode--disabled {
+  opacity: 0.4;
+  filter: grayscale(0.6);
+}
+.fnode--rule.fnode--disabled.is-selected {
+  opacity: 0.75;
+  filter: grayscale(0.3);
 }
 .fnode__rstatus {
   font-size: 10.5px;
