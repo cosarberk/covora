@@ -93,6 +93,7 @@ export const App = ({
   const [newGitToken, setNewGitToken] = useState('')
   const [pullKey, setPullKey] = useState<string | null>(null)
   const [pullRef, setPullRef] = useState('')
+  const [pullBase, setPullBase] = useState('')
   const [pulling, setPulling] = useState(false)
   const [copied, setCopied] = useState(false)
   const [cmdkOpen, setCmdkOpen] = useState(false)
@@ -266,13 +267,28 @@ export const App = ({
     if (pullKey === null) {
       return
     }
+    const ref = pullRef.trim()
+    const base = pullBase.trim()
+    // base verildiyse diff modu; o zaman head (dal alanı) zorunlu.
+    if (base.length > 0 && ref.length === 0) {
+      toast.error('Diff için "dal (head)" alanını da doldur')
+      return
+    }
     setPulling(true)
     try {
-      const ref = pullRef.trim()
-      const result = await api.pullReview(pullKey, ref.length > 0 ? ref : undefined)
-      toast.success(`Depo çekildi, review kuyruğa alındı (#${result.runId.slice(-6)})`)
+      const options =
+        base.length > 0
+          ? { base, head: ref }
+          : ref.length > 0
+            ? { ref }
+            : {}
+      const result = await api.pullReview(pullKey, options)
+      toast.success(
+        `${base.length > 0 ? 'Diff' : 'Depo'} çekildi, review kuyruğa alındı (#${result.runId.slice(-6)})`
+      )
       setPullKey(null)
       setPullRef('')
+      setPullBase('')
       setView('processes')
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : 'Depo çekilemedi')
@@ -388,6 +404,7 @@ export const App = ({
                       className="link-button"
                       onClick={() => {
                         setPullRef('')
+                        setPullBase('')
                         setPullKey(project.key)
                       }}
                     >
@@ -462,8 +479,8 @@ export const App = ({
               <div className="modal" onClick={(event) => event.stopPropagation()}>
                 <div className="modal__title">Depodan review başlat</div>
                 <div className="modal__msg">
-                  Covora, <b>{pullKey}</b> projesinin kayıtlı git bağlantısıyla depoyu kendisi
-                  çekip bir code review kuyruğa alır.
+                  Covora, <b>{pullKey}</b> projesinin git bağlantısıyla depoyu kendisi çeker.
+                  Taban boşsa tüm branch; taban dolduysa yalnızca değişen dosyalar (diff) incelenir.
                 </div>
                 <form
                   className="modal__form"
@@ -474,10 +491,16 @@ export const App = ({
                 >
                   <input
                     className="input input--sm"
-                    placeholder="dal (boş bırakılırsa varsayılan dal)"
+                    placeholder="dal / head (boşsa varsayılan dal)"
                     value={pullRef}
                     onChange={(event) => setPullRef(event.target.value)}
                     autoFocus
+                  />
+                  <input
+                    className="input input--sm"
+                    placeholder="karşılaştırma tabanı / base (opsiyonel → diff)"
+                    value={pullBase}
+                    onChange={(event) => setPullBase(event.target.value)}
                   />
                   <div className="modal__actions">
                     <button

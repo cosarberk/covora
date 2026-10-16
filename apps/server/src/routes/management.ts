@@ -29,8 +29,12 @@ const upsertProjectBodySchema = z.object({
 })
 
 const pullReviewBodySchema = z.object({
-  /** Çekilecek dal (verilmezse deponun varsayılan dalı). */
-  ref: z.string().min(1).optional()
+  /** Tüm branch modunda çekilecek dal (verilmezse deponun varsayılan dalı). */
+  ref: z.string().min(1).optional(),
+  /** Diff modu: karşılaştırma tabanı (base+head birlikte verilmeli). */
+  base: z.string().min(1).optional(),
+  /** Diff modu: incelenecek uç. */
+  head: z.string().min(1).optional()
 })
 
 const createRuleBodySchema = z.object({
@@ -137,11 +141,16 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
     }
+    // base verildiyse head de zorunlu (diff modu için iki uç gerekir).
+    if (parsed.data.base !== undefined && parsed.data.head === undefined) {
+      return reply.status(400).send({ error: 'Diff için base ile birlikte head de gerekli' })
+    }
     try {
-      const result = await deps.pullReview(
-        key,
-        ...(parsed.data.ref !== undefined ? ([parsed.data.ref] as const) : ([] as const))
-      )
+      const result = await deps.pullReview(key, {
+        ...(parsed.data.ref !== undefined ? { ref: parsed.data.ref } : {}),
+        ...(parsed.data.base !== undefined ? { base: parsed.data.base } : {}),
+        ...(parsed.data.head !== undefined ? { head: parsed.data.head } : {})
+      })
       if (!result.ok) {
         return result.reason === 'no-project'
           ? reply.status(404).send({ error: 'Proje bulunamadı' })

@@ -75,7 +75,7 @@ import type { ReviewRoutesDeps } from './routes/reviews.js'
 import type { RunRoutesDeps } from './routes/runs.js'
 import { createChatSender } from './services/chat-factory.js'
 import { createRunEventBus } from './services/events.js'
-import { cloneAndCollect } from './services/git-source.js'
+import { cloneAndCollect, cloneAndCollectDiff } from './services/git-source.js'
 import { enqueueReview } from './services/review.service.js'
 import type { ManagementDeps, ProjectRecord } from './services/management.js'
 import { dispatchReviewNotifications } from './services/notifications.js'
@@ -230,7 +230,7 @@ const start = async (): Promise<void> => {
     createIntegration: (input) => createIntegration(prisma, input),
     updateIntegration: (id, patch) => updateIntegration(prisma, id, patch),
     deleteIntegration: (id) => deleteIntegration(prisma, id),
-    pullReview: async (key, ref) => {
+    pullReview: async (key, options = {}) => {
       const project = await findProjectByKey(prisma, key)
       if (project === null) {
         return { ok: false, reason: 'no-project' }
@@ -239,14 +239,18 @@ const start = async (): Promise<void> => {
         return { ok: false, reason: 'no-git' }
       }
       const providerParsed = gitProviderSchema.safeParse(project.gitProvider)
-      const { files, commitSha, branch } = await cloneAndCollect(
-        {
-          provider: providerParsed.success ? providerParsed.data : null,
-          repoUrl: project.gitRepoUrl,
-          token: project.gitToken
-        },
-        ref !== undefined ? { ref } : {}
-      )
+      const gitSource = {
+        provider: providerParsed.success ? providerParsed.data : null,
+        repoUrl: project.gitRepoUrl,
+        token: project.gitToken
+      }
+      // base+head → diff (yalnızca değişen dosyalar); aksi halde tüm branch.
+      const collected =
+        options.base !== undefined && options.head !== undefined
+          ? await cloneAndCollectDiff(gitSource, { base: options.base, head: options.head }).then(
+              (result) => ({ files: result.files, commitSha: result.headSha, branch: result.branch })
+            )
+          : await cloneAndCollect(gitSource, options.ref !== undefined ? { ref: options.ref } : {})
       const enqueued = await enqueueReview(
         {
           findProjectByKey: (k) => findProjectByKey(prisma, k),
@@ -257,9 +261,9 @@ const start = async (): Promise<void> => {
         },
         {
           projectKey: key,
-          codeHash: commitSha,
-          input: { kind: 'code', files },
-          origin: { repoUrl: project.gitRepoUrl, branch, commitSha }
+          codeHash: collected.commitSha,
+          input: { kind: 'code', files: collected.files },
+          origin: { repoUrl: project.gitRepoUrl, branch: collected.branch, commitSha: collected.commitSha }
         }
       )
       return {

@@ -66,6 +66,16 @@ export type PullReviewOutcome =
   | { readonly ok: true; readonly runId: string; readonly queuePosition?: number }
   | { readonly ok: false; readonly reason: 'no-project' | 'no-git' }
 
+/**
+ * Depodan review tetikleme seçenekleri. `base`+`head` verilirse diff (yalnızca
+ * değişen dosyalar), yoksa `ref` (ya da varsayılan dal) ile tüm branch incelenir.
+ */
+export interface PullReviewOptions {
+  readonly ref?: string
+  readonly base?: string
+  readonly head?: string
+}
+
 /** Review geçmişi okuma modeli (sonuç ayrıntısı olmadan özet). */
 export interface ReviewRecord {
   readonly id: string
@@ -176,5 +186,5 @@ export interface ManagementDeps {
    * alır (dışarıdan dosya push etmeden). Proje/git yoksa `ok:false` döner; çekme
    * hatası fırlatılır.
    */
-  readonly pullReview: (key: string, ref?: string) => Promise<PullReviewOutcome>
+  readonly pullReview: (key: string, options?: PullReviewOptions) => Promise<PullReviewOutcome>
 }

@@ -43,6 +43,24 @@ export interface CollectResult {
   readonly branch: string
 }
 
+/** Diff çekme seçenekleri: iki ref arası değişen dosyalar. */
+export interface DiffOptions {
+  /** Karşılaştırma tabanı (base ref: dal/tag/sha). */
+  readonly base: string
+  /** İncelenecek uç (head ref: dal/tag/sha). */
+  readonly head: string
+  /** Fetch/diff zaman aşımı (ms). */
+  readonly timeoutMs?: number
+}
+
+/** Diff sonucu: yalnızca değişen dosyalar + taraf commit'leri. */
+export interface DiffResult {
+  readonly files: CodeFile[]
+  readonly baseSha: string
+  readonly headSha: string
+  readonly branch: string
+}
+
 /** Review'a alınmayacak dizinler (bağımlılık/çıktı/vcs). */
 const SKIP_DIRS = new Set([
   '.git',
@@ -112,6 +130,33 @@ const buildAuthUrl = (source: GitSource): string => {
       break
   }
   return url.toString()
+}
+
+/** Bir uzantının review'a uygun (metin/kod) olup olmadığı. */
+const isAllowedExt = (name: string): boolean => {
+  const ext = name.includes('.') ? name.split('.').pop()!.toLowerCase() : ''
+  return ALLOWED_EXT.has(ext)
+}
+
+/**
+ * Tek bir (göreli) yolu filtreden geçirip okur; uygun değilse (uzantı/boyut/
+ * bulunamadı) null döner. Yol daima POSIX ayırıcıyla normalize edilir.
+ */
+const readAllowed = async (root: string, relPath: string): Promise<CodeFile | null> => {
+  if (!isAllowedExt(relPath)) {
+    return null
+  }
+  const full = join(root, relPath)
+  try {
+    const info = await stat(full)
+    if (!info.isFile() || info.size === 0 || info.size > MAX_FILE_BYTES) {
+      return null
+    }
+    const content = await readFile(full, 'utf8')
+    return { path: relPath.split(sep).join('/'), content }
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -212,6 +257,73 @@ export const cloneAndCollect = async (
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`Depo çekilemedi: ${redact(message, source.token)}`)
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
+/**
+ * İki ref (base → head) arasındaki **değişen** dosyaları çeker. Her iki ref'i de
+ * shallow fetch eder (hızlı), head'i checkout edip base ile iki-nokta diff alır;
+ * yalnızca eklenen/değişen/yeniden-adlandırılan (silinenler hariç) dosyaların
+ * güncel içeriğini toplar. Diff bazlı review bunu kullanır.
+ *
+ * @param source - Git bağlantısı.
+ * @param options - base/head ref'leri ve zaman aşımı.
+ * @returns Değişen dosyalar + base/head sha + dal (head).
+ */
+export const cloneAndCollectDiff = async (
+  source: GitSource,
+  options: DiffOptions
+): Promise<DiffResult> => {
+  const authUrl = buildAuthUrl(source)
+  const timeout = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const dir = await mkdtemp(join(tmpdir(), 'covora-diff-'))
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+  const git = (args: readonly string[]): Promise<{ stdout: string }> =>
+    execFileAsync('git', ['-C', dir, ...args], { timeout, env, maxBuffer: 32 * 1024 * 1024 })
+
+  try {
+    await execFileAsync('git', ['init', '-q', dir], { timeout, env })
+    await git(['remote', 'add', 'origin', authUrl])
+    // base ve head'i ayrı ayrı shallow çek; base'i geçici bir ref'e sabitle.
+    await git(['fetch', '--depth', '1', 'origin', options.base])
+    const { stdout: baseShaOut } = await git(['rev-parse', 'FETCH_HEAD'])
+    const baseSha = baseShaOut.trim()
+    await git(['fetch', '--depth', '1', 'origin', options.head])
+    const { stdout: headShaOut } = await git(['rev-parse', 'FETCH_HEAD'])
+    const headSha = headShaOut.trim()
+    await git(['checkout', '-q', '--detach', 'FETCH_HEAD'])
+
+    const { stdout: diffOut } = await git([
+      'diff',
+      '--name-only',
+      '--diff-filter=ACMR',
+      baseSha,
+      headSha
+    ])
+    const changed = diffOut.split('\n').map((line) => line.trim()).filter((line) => line.length > 0)
+
+    const files: CodeFile[] = []
+    let totalBytes = 0
+    for (const relPath of changed) {
+      if (files.length >= MAX_FILES || totalBytes >= MAX_TOTAL_BYTES) {
+        break
+      }
+      const file = await readAllowed(dir, relPath)
+      if (file !== null) {
+        files.push(file)
+        totalBytes += Buffer.byteLength(file.content, 'utf8')
+      }
+    }
+    if (files.length === 0) {
+      throw new Error('İki ref arasında incelenecek değişen kod dosyası yok')
+    }
+
+    return { files, baseSha, headSha, branch: options.head }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Diff çekilemedi: ${redact(message, source.token)}`)
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {})
   }
