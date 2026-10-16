@@ -16,6 +16,7 @@ import {
   createPrismaClient,
   createProvider as createProviderRecord,
   createRule,
+  createIntegration,
   createRun,
   createUser,
   createWebhook,
@@ -23,6 +24,7 @@ import {
   deletePack,
   deleteProjectByKey,
   rotateIngestToken,
+  deleteIntegration,
   deleteProvider,
   deleteWebhook,
   ensureBuiltinPacks,
@@ -41,6 +43,7 @@ import {
   getRunReport,
   listActiveWebhooks,
   listEnabledRules,
+  listIntegrations,
   listManagementRules,
   listPacks,
   listPacksByProject,
@@ -56,11 +59,12 @@ import {
   setActiveProvider,
   setWebhookActive,
   toUser,
+  updateIntegration,
   updateRuleWithAudit,
   upsertProject,
   upsertProjectConfig
 } from '@covora/db'
-import type { User } from '@covora/types'
+import { gitProviderSchema, type User } from '@covora/types'
 
 import { buildApp } from './app.js'
 import { hashPassword, verifyPassword } from './auth/password.js'
@@ -71,12 +75,38 @@ import type { ReviewRoutesDeps } from './routes/reviews.js'
 import type { RunRoutesDeps } from './routes/runs.js'
 import { createChatSender } from './services/chat-factory.js'
 import { createRunEventBus } from './services/events.js'
-import type { ManagementDeps } from './services/management.js'
+import type { ManagementDeps, ProjectRecord } from './services/management.js'
 import { dispatchReviewNotifications } from './services/notifications.js'
 import { createProviderResolver } from './services/provider-factory.js'
 import { checkProviderHealth } from './services/provider-health.js'
 import { unloadProvider, warmProvider } from './services/provider-control.js'
 import { startWorker } from './services/worker.js'
+
+/**
+ * Prisma proje kaydını yönetim okuma modeline çevirir. Gizli `gitToken` dönmez;
+ * yalnızca varlığı `hasGitToken` ile bildirilir. Geçersiz sağlayıcı değeri null'a
+ * düşer.
+ */
+const toProjectRecord = (project: {
+  readonly id: string
+  readonly key: string
+  readonly name: string
+  readonly ingestToken: string
+  readonly gitProvider: string | null
+  readonly gitRepoUrl: string | null
+  readonly gitToken: string | null
+}): ProjectRecord => {
+  const provider = gitProviderSchema.safeParse(project.gitProvider)
+  return {
+    id: project.id,
+    key: project.key,
+    name: project.name,
+    ingestToken: project.ingestToken,
+    gitProvider: provider.success ? provider.data : null,
+    gitRepoUrl: project.gitRepoUrl,
+    hasGitToken: project.gitToken !== null && project.gitToken.length > 0
+  }
+}
 
 /**
  * Sunucuyu yapılandırır ve dinlemeye başlatır.
@@ -148,22 +178,11 @@ const start = async (): Promise<void> => {
 
   const managementDeps: ManagementDeps = {
     findProjectByKey: (key) => findProjectByKey(prisma, key),
-    upsertProject: async (key, name) => {
-      const project = await upsertProject(prisma, key, name)
-      return {
-        id: project.id,
-        key: project.key,
-        name: project.name,
-        ingestToken: project.ingestToken
-      }
+    upsertProject: async (key, name, git) => {
+      const project = await upsertProject(prisma, key, name, git)
+      return toProjectRecord(project)
     },
-    listProjects: async () =>
-      (await listProjects(prisma)).map((project) => ({
-        id: project.id,
-        key: project.key,
-        name: project.name,
-        ingestToken: project.ingestToken
-      })),
+    listProjects: async () => (await listProjects(prisma)).map(toProjectRecord),
     deleteProject: (key) => deleteProjectByKey(prisma, key),
     rotateIngestToken: (key) => rotateIngestToken(prisma, key),
     listRules: (projectId) => listManagementRules(prisma, projectId),
@@ -204,7 +223,11 @@ const start = async (): Promise<void> => {
     deleteProvider: (id) => deleteProvider(prisma, id),
     getProviderHealth: (id) => checkProviderHealth(prisma, id),
     warmProvider: (id) => warmProvider(prisma, id),
-    unloadProvider: (id) => unloadProvider(prisma, id)
+    unloadProvider: (id) => unloadProvider(prisma, id),
+    listIntegrations: () => listIntegrations(prisma),
+    createIntegration: (input) => createIntegration(prisma, input),
+    updateIntegration: (id, patch) => updateIntegration(prisma, id, patch),
+    deleteIntegration: (id) => deleteIntegration(prisma, id)
   }
 
   const chatDeps: ChatDeps = {

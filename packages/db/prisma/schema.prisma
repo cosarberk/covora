@@ -71,6 +71,12 @@ model Project {
   name        String
   /// Makine istemcilerinin (pipeline CLI / SDK) review göndermek için kullandığı gizli token.
   ingestToken String         @unique @default(cuid())
+  /// Covora'nın depoyu kendisi çekebilmesi için git bağlantısı (opsiyonel).
+  /// Sağlayıcı (github/gitlab/gitea/generic), depo adresi ve gizli erişim jetonu.
+  /// `gitToken` asla UI'ya dönülmez; yalnızca varlığı bildirilir.
+  gitProvider String?
+  gitRepoUrl  String?
+  gitToken    String?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   packs       ProjectPack[]
@@ -285,6 +291,27 @@ model ProviderConfig {
   updatedAt     DateTime     @updatedAt
 
   @@index([kind, active])
+}
+
+/// Çalışma-alanı geneli 3. parti bağlantı (Bağlamalar sayfası). Jira gibi dış
+/// sistemlerin uç noktası ve gizli erişim jetonu burada tutulur; otomasyon
+/// kuralları ileride buraya bağlanır. `token` gizlidir, UI'ya asla dönülmez.
+model Integration {
+  id        String   @id @default(cuid())
+  /// Sağlayıcı anahtarı (jira, generic, …) — şema (zod) ile doğrulanır.
+  provider  String
+  /// Okunabilir ad.
+  name      String
+  /// Dış sistemin temel adresi (örn. https://firma.atlassian.net).
+  baseUrl   String
+  /// Gizli erişim jetonu (asla UI'ya dönülmez; yalnızca varlığı bildirilir).
+  token     String?
+  /// Bağlantı etkin mi.
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([provider])
 }
 
 /// Proje bazlı coverage yapılandırması ve gate politikası.

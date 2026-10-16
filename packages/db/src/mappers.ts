@@ -6,6 +6,7 @@
 
 import {
   coverageConfigSchema,
+  integrationProviderSchema,
   managementRuleSchema,
   reviewOriginSchema,
   userRoleSchema,
@@ -13,6 +14,7 @@ import {
   type AuditRecord,
   type CoverageConfig,
   type GatePolicy,
+  type Integration,
   type ManagementRule,
   type Pack,
   type ProviderConfig,
@@ -27,6 +29,7 @@ import {
   type Webhook
 } from '@covora/types'
 import type {
+  Integration as PrismaIntegration,
   Pack as PrismaPack,
   ProjectConfig as PrismaProjectConfig,
   ProviderConfig as PrismaProviderConfig,
@@ -151,6 +154,24 @@ export const toProviderConfig = (provider: PrismaProviderConfig): ProviderConfig
   hasApiKey: provider.apiKey !== null && provider.apiKey.length > 0,
   active: provider.active
 })
+
+/**
+ * Prisma bağlantısını domain okuma modeline dönüştürür. Gizli jeton dönülmez;
+ * yalnızca varlığı `hasToken` ile bildirilir (provider `hasApiKey` deseniyle
+ * tutarlı). Geçersiz `provider` değeri gelirse `generic`'e düşer.
+ */
+export const toIntegration = (integration: PrismaIntegration): Integration => {
+  const parsed = integrationProviderSchema.safeParse(integration.provider)
+  return {
+    id: integration.id,
+    provider: parsed.success ? parsed.data : 'generic',
+    name: integration.name,
+    baseUrl: integration.baseUrl,
+    hasToken: integration.token !== null && integration.token.length > 0,
+    enabled: integration.enabled,
+    createdAt: integration.createdAt.toISOString()
+  }
+}
 
 /** Prisma run adımını domain modeline dönüştürür. */
 export const toRunStep = (step: PrismaRunStep): RunStep => ({

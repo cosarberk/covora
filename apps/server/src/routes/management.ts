@@ -6,9 +6,12 @@
  */
 
 import {
+  createIntegrationInputSchema,
+  gitProviderSchema,
   reviewKindSchema,
   ruleEvaluationTypeSchema,
   severitySchema,
+  updateIntegrationInputSchema,
   webhookEventSchema
 } from '@covora/types'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
@@ -19,7 +22,10 @@ import type { ManagementDeps, RulePatch } from '../services/management.js'
 
 const upsertProjectBodySchema = z.object({
   key: z.string().min(1),
-  name: z.string().min(1)
+  name: z.string().min(1),
+  gitProvider: gitProviderSchema.nullable().optional(),
+  gitRepoUrl: z.string().min(1).nullable().optional(),
+  gitToken: z.string().min(1).nullable().optional()
 })
 
 const createRuleBodySchema = z.object({
@@ -109,7 +115,11 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
     }
-    const project = await deps.upsertProject(parsed.data.key, parsed.data.name)
+    const project = await deps.upsertProject(parsed.data.key, parsed.data.name, {
+      ...(parsed.data.gitProvider !== undefined ? { gitProvider: parsed.data.gitProvider } : {}),
+      ...(parsed.data.gitRepoUrl !== undefined ? { gitRepoUrl: parsed.data.gitRepoUrl } : {}),
+      ...(parsed.data.gitToken !== undefined ? { gitToken: parsed.data.gitToken } : {})
+    })
     return reply.status(201).send(project)
   })
 
@@ -413,6 +423,37 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
   app.delete('/providers/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     await deps.deleteProvider(id)
+    return reply.status(204).send()
+  })
+
+  // Bağlamalar (3. parti bağlantılar: Jira vb.) — çalışma-alanı geneli CRUD.
+  app.get('/integrations', async () => ({ integrations: await deps.listIntegrations() }))
+
+  app.post('/integrations', async (request, reply) => {
+    const parsed = createIntegrationInputSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
+    }
+    const integration = await deps.createIntegration(parsed.data)
+    return reply.status(201).send(integration)
+  })
+
+  app.patch('/integrations/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const parsed = updateIntegrationInputSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Geçersiz istek', details: parsed.error.issues })
+    }
+    const integration = await deps.updateIntegration(id, parsed.data)
+    if (integration === null) {
+      return reply.status(404).send({ error: 'Bağlantı bulunamadı' })
+    }
+    return reply.send(integration)
+  })
+
+  app.delete('/integrations/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    await deps.deleteIntegration(id)
     return reply.status(204).send()
   })
 }

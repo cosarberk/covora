@@ -9,8 +9,11 @@
 import type {
   AuditRecord,
   CoverageConfig,
+  CreateIntegrationInput,
   DashboardSummary,
   GatePolicy,
+  GitProvider,
+  Integration,
   ManagementRule,
   Pack,
   ProviderCapabilities,
@@ -28,6 +31,7 @@ import type {
   RunLogLine,
   RunSummary,
   Severity,
+  UpdateIntegrationInput,
   User,
   Webhook,
   WebhookEvent
@@ -62,6 +66,19 @@ export interface ProjectSummary {
   readonly name: string
   /** Makine istemcilerinin review göndermek için kullandığı gizli token. */
   readonly ingestToken: string
+  /** Git sağlayıcısı (covora depoyu çeker); yoksa null. */
+  readonly gitProvider: GitProvider | null
+  /** Depo adresi; yoksa null. */
+  readonly gitRepoUrl: string | null
+  /** Git erişim jetonu tanımlı mı (değerin kendisi asla dönülmez). */
+  readonly hasGitToken: boolean
+}
+
+/** Proje oluştururken opsiyonel git bağlantısı. */
+export interface ProjectGitInput {
+  readonly gitProvider?: GitProvider | null
+  readonly gitRepoUrl?: string | null
+  readonly gitToken?: string | null
 }
 
 /** Bir run'ın saklı review girdisi (ekran görüntüsü / dosyalar). */
@@ -192,7 +209,7 @@ export interface StudioApi {
   listReviewResults(reviewId: string): Promise<readonly RuleResult[]>
   /** Bir review'ın tam coverage/gate dökümünü getirir (yoksa null). */
   getReviewOutcome(reviewId: string): Promise<ReviewOutcome | null>
-  upsertProject(key: string, name: string): Promise<ProjectSummary>
+  upsertProject(key: string, name: string, git?: ProjectGitInput): Promise<ProjectSummary>
   listPacks(): Promise<readonly Pack[]>
   createPack(input: CreatePackInput): Promise<Pack>
   deletePack(id: string): Promise<void>
@@ -209,6 +226,14 @@ export interface StudioApi {
   testWebhook(id: string): Promise<WebhookTestResult>
   getProjectConfig(projectKey: string): Promise<ProjectConfig>
   updateProjectConfig(projectKey: string, input: ProjectConfigInput): Promise<ProjectConfig>
+  /** Çalışma-alanı geneli bağlantıları (Bağlamalar) listeler. */
+  listIntegrations(): Promise<readonly Integration[]>
+  /** Yeni bir bağlantı oluşturur. */
+  createIntegration(input: CreateIntegrationInput): Promise<Integration>
+  /** Bir bağlantıyı kısmi günceller. */
+  updateIntegration(id: string, patch: UpdateIntegrationInput): Promise<Integration>
+  /** Bir bağlantıyı siler. */
+  deleteIntegration(id: string): Promise<void>
 }
 
 const TOKEN_KEY = 'covora.token'
@@ -477,8 +502,8 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
       return data.outcome
     },
 
-    async upsertProject(key, name) {
-      return json<ProjectSummary>(await postJson('/projects', { key, name }))
+    async upsertProject(key, name, git) {
+      return json<ProjectSummary>(await postJson('/projects', { key, name, ...git }))
     },
 
     async listPacks() {
@@ -555,6 +580,25 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
       return json<ProjectConfig>(
         await postJson(`${projectPath(projectKey)}/config`, input, 'PUT')
       )
+    },
+
+    async listIntegrations() {
+      const data = await json<{ integrations: Integration[] }>(await authFetch('/integrations'))
+      return data.integrations
+    },
+
+    async createIntegration(input) {
+      return json<Integration>(await postJson('/integrations', input))
+    },
+
+    async updateIntegration(id, patch) {
+      return json<Integration>(
+        await postJson(`/integrations/${encodeURIComponent(id)}`, patch, 'PATCH')
+      )
+    },
+
+    async deleteIntegration(id) {
+      ok(await authFetch(`/integrations/${encodeURIComponent(id)}`, { method: 'DELETE' }))
     }
   }
 }

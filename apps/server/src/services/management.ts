@@ -15,7 +15,11 @@ import type {
 } from '@covora/db'
 import type {
   AuditRecord,
+  CreateIntegrationInput,
   DashboardSummary,
+  GitConnectionInput,
+  GitProvider,
+  Integration,
   ManagementRule,
   Pack,
   ProviderConfig,
@@ -25,6 +29,7 @@ import type {
   Rule,
   RuleResult,
   Severity,
+  UpdateIntegrationInput,
   Webhook
 } from '@covora/types'
 
@@ -45,6 +50,12 @@ export interface ProjectRecord {
   readonly name: string
   /** Makine istemcilerinin review göndermek için kullandığı gizli token. */
   readonly ingestToken: string
+  /** Git sağlayıcısı (covora'nın depoyu çekmesi için); yoksa null. */
+  readonly gitProvider: GitProvider | null
+  /** Depo adresi; yoksa null. */
+  readonly gitRepoUrl: string | null
+  /** Git erişim jetonu tanımlı mı (değerin kendisi asla dönülmez). */
+  readonly hasGitToken: boolean
 }
 
 /** Review geçmişi okuma modeli (sonuç ayrıntısı olmadan özet). */
@@ -64,8 +75,12 @@ export interface ReviewRecord {
 export interface ManagementDeps {
   /** Projeyi anahtarına göre bulur. */
   readonly findProjectByKey: (key: string) => Promise<{ readonly id: string } | null>
-  /** Projeyi oluşturur ya da adını günceller. */
-  readonly upsertProject: (key: string, name: string) => Promise<ProjectRecord>
+  /** Projeyi oluşturur ya da adını/git bağlantısını günceller. */
+  readonly upsertProject: (
+    key: string,
+    name: string,
+    git?: GitConnectionInput
+  ) => Promise<ProjectRecord>
   /** Tüm projeleri listeler. */
   readonly listProjects: () => Promise<readonly ProjectRecord[]>
   /** Bir projeyi anahtarına göre siler. */
@@ -137,4 +152,15 @@ export interface ManagementDeps {
     projectId: string,
     input: ProjectConfigInput
   ) => Promise<EffectiveConfig>
+  /** Çalışma-alanı geneli 3. parti bağlantıları (Bağlamalar) listeler. */
+  readonly listIntegrations: () => Promise<readonly Integration[]>
+  /** Yeni bir bağlantı oluşturur. */
+  readonly createIntegration: (input: CreateIntegrationInput) => Promise<Integration>
+  /** Bir bağlantıyı kısmi günceller. */
+  readonly updateIntegration: (
+    id: string,
+    patch: UpdateIntegrationInput
+  ) => Promise<Integration | null>
+  /** Bir bağlantıyı siler. */
+  readonly deleteIntegration: (id: string) => Promise<void>
 }

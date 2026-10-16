@@ -3741,6 +3741,18 @@ input:focus-visible,
   padding: 14px;
   justify-content: center;
 }
+.projcard__git {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.projcard__git-label {
+  font-size: 11px;
+  color: var(--text-faint);
+}
 
 /* Süreçler viewport içindeyken üst ayraç/çerçeveye uysun */
 .area__body--flush .proc {
@@ -4243,6 +4255,12 @@ input:focus-visible,
   color: var(--text-dim);
   line-height: 1.55;
   margin-bottom: 18px;
+}
+.modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 16px;
 }
 .modal__actions {
   display: flex;
