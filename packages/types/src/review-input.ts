@@ -8,6 +8,7 @@
 import { z } from 'zod'
 
 import { ruleResultSchema } from './checklist.js'
+import { reviewScopeSchema } from './rule.js'
 
 /** Code review'da değerlendirilecek tek bir kaynak dosya. */
 export const codeFileSchema = z.object({
@@ -38,7 +39,13 @@ export const reviewInputSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('code'),
     /** Değerlendirilecek kaynak dosyalar. */
-    files: z.array(codeFileSchema).min(1)
+    files: z.array(codeFileSchema).min(1),
+    /**
+     * İnceleme kapsamı. `project` (tüm depo çekildi) ise proje-geneli (ArchUnit)
+     * kurallar da koşar; `changes` (diff/kısmi dosya) ise yalnızca changes-kapsam
+     * kurallar. Verilmezse `changes`.
+     */
+    mode: reviewScopeSchema.optional()
   })
 ])
 

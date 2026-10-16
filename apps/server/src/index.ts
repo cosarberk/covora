@@ -202,13 +202,15 @@ const start = async (): Promise<void> => {
       repoUrl: project.gitRepoUrl,
       token: project.gitToken
     }
-    // base+head → diff (yalnızca değişen dosyalar); aksi halde tüm branch.
-    const collected =
-      options.base !== undefined && options.head !== undefined
-        ? await cloneAndCollectDiff(gitSource, { base: options.base, head: options.head }).then(
-            (result) => ({ files: result.files, commitSha: result.headSha, branch: result.branch })
-          )
-        : await cloneAndCollect(gitSource, options.ref !== undefined ? { ref: options.ref } : {})
+    // base+head → diff (yalnızca değişen dosyalar, changes kapsam); aksi halde
+    // tüm branch (project kapsam → ArchUnit kuralları da koşar).
+    const isDiff = options.base !== undefined && options.head !== undefined
+    const mode = isDiff ? 'changes' : 'project'
+    const collected = isDiff
+      ? await cloneAndCollectDiff(gitSource, { base: options.base!, head: options.head! }).then(
+          (result) => ({ files: result.files, commitSha: result.headSha, branch: result.branch })
+        )
+      : await cloneAndCollect(gitSource, options.ref !== undefined ? { ref: options.ref } : {})
     const enqueued = await enqueueReview(
       {
         findProjectByKey: (k) => findProjectByKey(prisma, k),
@@ -220,7 +222,7 @@ const start = async (): Promise<void> => {
       {
         projectKey: key,
         codeHash: collected.commitSha,
-        input: { kind: 'code', files: collected.files },
+        input: { kind: 'code', files: collected.files, mode },
         origin: { repoUrl: project.gitRepoUrl, branch: collected.branch, commitSha: collected.commitSha }
       }
     )

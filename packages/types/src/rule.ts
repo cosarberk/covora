@@ -18,6 +18,18 @@ export const ruleEvaluationTypeSchema = z.enum(['deterministic', 'llm'])
 /** {@link ruleEvaluationTypeSchema} tip çıkarımı. */
 export type RuleEvaluationType = z.infer<typeof ruleEvaluationTypeSchema>
 
+/**
+ * Kuralın hangi kapsamda değerlendirileceği.
+ * - `changes`: değişen/verilen dosyalar üzerinde (diff review ve normal akış).
+ * - `project`: TÜM proje üzerinde çapraz-dosya analiz (ArchUnit tarzı; import
+ *   grafiği, katman bağımlılığı, döngü). Yalnızca proje-geneli akışta koşar;
+ *   diff'te grafik eksik olacağından atlanır.
+ */
+export const reviewScopeSchema = z.enum(['changes', 'project'])
+
+/** {@link reviewScopeSchema} tip çıkarımı. */
+export type ReviewScope = z.infer<typeof reviewScopeSchema>
+
 /** Review türü: görsel arayüz (UI) ya da kaynak kod. */
 export const reviewKindSchema = z.enum(['ui', 'code'])
 
@@ -39,6 +51,11 @@ export const ruleSchema = z.object({
   kind: reviewKindSchema,
   /** Kuralın nasıl değerlendirileceği. */
   evaluation: ruleEvaluationTypeSchema,
+  /**
+   * Kuralın kapsamı. Eski kayıtlar/UI kuralları için varsayılan `changes`.
+   * `project` (ArchUnit) yalnızca proje-geneli akışta koşar.
+   */
+  scope: reviewScopeSchema.default('changes'),
   /** Önem derecesi. */
   severity: severitySchema,
   /** Coverage katkı ağırlığı (pozitif). */

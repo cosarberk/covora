@@ -145,6 +145,8 @@ model Rule {
   description String         @default("")
   kind        ReviewKind
   evaluation  RuleEvaluation
+  /// Kapsam: "changes" (diff/verilen dosyalar) | "project" (ArchUnit, tüm depo).
+  scope       String         @default("changes")
   severity    Severity
   weight      Float
   prompt      String?

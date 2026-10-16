@@ -12,7 +12,6 @@ import type {
   AuditRecord,
   ManagementRule,
   ReviewKind,
-  RuleEvaluationType,
   Severity
 } from '@covora/types'
 import { Fragment, useCallback, useEffect, useState } from 'react'
@@ -45,6 +44,7 @@ const makeEmptyForm = (kind: ReviewKind): CreateRuleInput => ({
   description: '',
   kind,
   evaluation: 'llm',
+  scope: 'changes',
   severity: 'warning',
   weight: 1
 })
@@ -175,13 +175,19 @@ export const RulesPanel = ({
             />
             <select
               className="select"
-              value={form.evaluation}
-              onChange={(event) =>
-                setForm({ ...form, evaluation: event.target.value as RuleEvaluationType })
-              }
+              value={form.scope === 'project' ? 'arch' : form.evaluation === 'llm' ? 'ai' : 'det'}
+              onChange={(event) => {
+                const type = event.target.value
+                setForm({
+                  ...form,
+                  evaluation: type === 'ai' ? 'llm' : 'deterministic',
+                  scope: type === 'arch' ? 'project' : 'changes'
+                })
+              }}
             >
-              <option value="llm">AI-yargı</option>
-              <option value="deterministic">Deterministik</option>
+              <option value="ai">AI-yargı</option>
+              <option value="det">Deterministik</option>
+              {defaultKind === 'code' && <option value="arch">ArchUnit (proje-geneli)</option>}
             </select>
             <select
               className="select"
@@ -248,9 +254,9 @@ export const RulesPanel = ({
                   <td>
                     <span
                       className={`badge ${rule.evaluation === 'llm' ? 'badge--ai' : ''}`}
-                      title={rule.kind}
+                      title={rule.scope === 'project' ? 'ArchUnit (proje-geneli)' : rule.kind}
                     >
-                      {rule.evaluation === 'llm' ? 'AI' : 'DET'}
+                      {rule.scope === 'project' ? 'ARCH' : rule.evaluation === 'llm' ? 'AI' : 'DET'}
                     </span>
                   </td>
                   <td>

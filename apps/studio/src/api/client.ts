@@ -24,6 +24,7 @@ import type {
   ReviewKind,
   ReviewOutcome,
   ReviewRun,
+  ReviewScope,
   Rule,
   RuleEvaluationType,
   RuleResult,
@@ -121,6 +122,7 @@ export interface CreateRuleInput {
   readonly description?: string
   readonly kind: ReviewKind
   readonly evaluation: RuleEvaluationType
+  readonly scope?: ReviewScope
   readonly severity: Severity
   readonly weight: number
   readonly prompt?: string | null

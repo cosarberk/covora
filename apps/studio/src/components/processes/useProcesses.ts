@@ -427,6 +427,7 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
         data: {
           title: rule.title,
           evaluation: rule.evaluation,
+          scope: rule.scope,
           severity: rule.severity,
           weight: rule.weight,
           enabled: rule.enabled,
@@ -444,6 +445,7 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
         data: {
           title: rule.title,
           evaluation: rule.evaluation,
+          scope: rule.scope,
           severity: rule.severity,
           weight: rule.weight,
           enabled: rule.enabled,

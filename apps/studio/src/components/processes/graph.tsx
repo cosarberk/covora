@@ -132,6 +132,8 @@ const StepNode = ({ data }: NodeProps): React.JSX.Element => {
 interface RuleNodeData extends Record<string, unknown> {
   readonly title: string
   readonly evaluation: 'deterministic' | 'llm'
+  /** Kapsam; 'project' ise ArchUnit olarak gösterilir. */
+  readonly scope: 'changes' | 'project'
   readonly severity: Severity
   readonly weight: number
   /** Kural etkin mi; pasif kurallar akışta soluk gösterilir. */
@@ -154,7 +156,7 @@ const RuleNode = ({ data }: NodeProps): React.JSX.Element => {
       <Handle type="target" position={Position.Left} className="fnode__handle" />
       <span className="fnode__rtop">
         <span className={`fnode__tag fnode__tag--${d.evaluation}`}>
-          {d.evaluation === 'llm' ? 'AI' : 'DET'}
+          {d.scope === 'project' ? 'ARCH' : d.evaluation === 'llm' ? 'AI' : 'DET'}
         </span>
         {!d.enabled && <span className="fnode__passive">PASİF</span>}
         {d.severity === 'blocker' && <span className="fnode__blocker">BLOCKER</span>}

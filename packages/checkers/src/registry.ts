@@ -11,6 +11,7 @@ import type { CheckerRegistry } from '@covora/core'
 import {
   asDeterministicChecker,
   noConsoleChecker,
+  noCyclicImportsChecker,
   noHardcodedUrlChecker,
   noTodoChecker
 } from './code.js'
@@ -19,5 +20,7 @@ import {
 export const builtinCodeCheckers: CheckerRegistry = {
   'no-todo': asDeterministicChecker(noTodoChecker),
   'no-console': asDeterministicChecker(noConsoleChecker),
-  'no-hardcoded-url': asDeterministicChecker(noHardcodedUrlChecker)
+  'no-hardcoded-url': asDeterministicChecker(noHardcodedUrlChecker),
+  // ArchUnit tarzı (scope=project): tüm proje import grafiğinde döngü kontrolü.
+  'no-cyclic-imports': asDeterministicChecker(noCyclicImportsChecker)
 }

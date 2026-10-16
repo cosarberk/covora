@@ -9,6 +9,7 @@ import {
   createIntegrationInputSchema,
   gitProviderSchema,
   reviewKindSchema,
+  reviewScopeSchema,
   ruleEvaluationTypeSchema,
   severitySchema,
   updateIntegrationInputSchema,
@@ -43,6 +44,7 @@ const createRuleBodySchema = z.object({
   description: z.string().optional(),
   kind: reviewKindSchema,
   evaluation: ruleEvaluationTypeSchema,
+  scope: reviewScopeSchema.optional(),
   severity: severitySchema,
   weight: z.number().positive(),
   prompt: z.string().nullable().optional(),
@@ -236,6 +238,7 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
         evaluation: parsed.data.evaluation,
         severity: parsed.data.severity,
         weight: parsed.data.weight,
+        ...(parsed.data.scope !== undefined ? { scope: parsed.data.scope } : {}),
         ...(parsed.data.description !== undefined ? { description: parsed.data.description } : {}),
         ...(parsed.data.prompt !== undefined ? { prompt: parsed.data.prompt } : {}),
         ...(parsed.data.enabled !== undefined ? { enabled: parsed.data.enabled } : {})

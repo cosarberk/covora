@@ -5,7 +5,7 @@
  * paketlerin seed'i.
  */
 
-import type { Pack, ReviewKind, RuleEvaluationType, Severity } from '@covora/types'
+import type { Pack, ReviewKind, ReviewScope, RuleEvaluationType, Severity } from '@covora/types'
 import type { PrismaClient } from '@prisma/client'
 
 import { toPack } from '../mappers.js'
@@ -115,6 +115,8 @@ interface BuiltinRule {
   readonly key: string
   readonly title: string
   readonly evaluation: RuleEvaluationType
+  /** Kapsam; verilmezse changes. project = ArchUnit (tüm depo). */
+  readonly scope?: ReviewScope
   readonly severity: Severity
   readonly weight: number
 }
@@ -134,7 +136,8 @@ const BUILTIN_PACKS: readonly BuiltinPack[] = [
     rules: [
       { key: 'no-todo', title: 'Kodda TODO/FIXME olmamalı', evaluation: 'deterministic', severity: 'warning', weight: 2 },
       { key: 'no-console', title: 'console.* çağrısı olmamalı', evaluation: 'deterministic', severity: 'warning', weight: 1 },
-      { key: 'no-hardcoded-url', title: 'Gömülü URL olmamalı', evaluation: 'deterministic', severity: 'warning', weight: 1 }
+      { key: 'no-hardcoded-url', title: 'Gömülü URL olmamalı', evaluation: 'deterministic', severity: 'warning', weight: 1 },
+      { key: 'no-cyclic-imports', title: 'Dairesel import olmamalı (ArchUnit)', evaluation: 'deterministic', scope: 'project', severity: 'blocker', weight: 3 }
     ]
   },
   {
@@ -171,10 +174,11 @@ export const ensureBuiltinPacks = async (prisma: PrismaClient): Promise<void> =>
           title: rule.title,
           kind: builtin.kind,
           evaluation: rule.evaluation,
+          scope: rule.scope ?? 'changes',
           severity: rule.severity,
           weight: rule.weight
         },
-        update: { title: rule.title }
+        update: { title: rule.title, scope: rule.scope ?? 'changes' }
       })
     }
   }

@@ -58,6 +58,7 @@ export const toDomainRule = (rule: PrismaRule): Rule => ({
   description: rule.description,
   kind: rule.kind,
   evaluation: rule.evaluation,
+  scope: rule.scope === 'project' ? 'project' : 'changes',
   severity: rule.severity,
   weight: rule.weight
 })
@@ -76,6 +77,7 @@ export const toManagementRule = (rule: PrismaRule): ManagementRule => ({
   description: rule.description,
   kind: rule.kind,
   evaluation: rule.evaluation,
+  scope: rule.scope === 'project' ? 'project' : 'changes',
   severity: rule.severity,
   weight: rule.weight,
   enabled: rule.enabled,
