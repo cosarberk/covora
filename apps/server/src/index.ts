@@ -77,7 +77,13 @@ import { createChatSender } from './services/chat-factory.js'
 import { createRunEventBus } from './services/events.js'
 import { cloneAndCollect, cloneAndCollectDiff } from './services/git-source.js'
 import { enqueueReview } from './services/review.service.js'
-import type { ManagementDeps, ProjectRecord } from './services/management.js'
+import type {
+  ManagementDeps,
+  ProjectRecord,
+  PullReviewOptions,
+  PullReviewOutcome
+} from './services/management.js'
+import type { GitWebhookDeps } from './routes/git-webhook.js'
 import { dispatchReviewNotifications } from './services/notifications.js'
 import { createProviderResolver } from './services/provider-factory.js'
 import { checkProviderHealth } from './services/provider-health.js'
@@ -178,6 +184,53 @@ const start = async (): Promise<void> => {
     getRunReport: (runId) => getRunReport(prisma, runId)
   }
 
+  // Depodan review tetikleme: hem studio (manuel) hem git webhook (otomatik) kullanır.
+  const pullReview = async (
+    key: string,
+    options: PullReviewOptions = {}
+  ): Promise<PullReviewOutcome> => {
+    const project = await findProjectByKey(prisma, key)
+    if (project === null) {
+      return { ok: false, reason: 'no-project' }
+    }
+    if (project.gitRepoUrl === null || project.gitRepoUrl.length === 0) {
+      return { ok: false, reason: 'no-git' }
+    }
+    const providerParsed = gitProviderSchema.safeParse(project.gitProvider)
+    const gitSource = {
+      provider: providerParsed.success ? providerParsed.data : null,
+      repoUrl: project.gitRepoUrl,
+      token: project.gitToken
+    }
+    // base+head → diff (yalnızca değişen dosyalar); aksi halde tüm branch.
+    const collected =
+      options.base !== undefined && options.head !== undefined
+        ? await cloneAndCollectDiff(gitSource, { base: options.base, head: options.head }).then(
+            (result) => ({ files: result.files, commitSha: result.headSha, branch: result.branch })
+          )
+        : await cloneAndCollect(gitSource, options.ref !== undefined ? { ref: options.ref } : {})
+    const enqueued = await enqueueReview(
+      {
+        findProjectByKey: (k) => findProjectByKey(prisma, k),
+        createRun: (input) => createRun(prisma, input),
+        getQueuePosition: (runId) => getQueuePosition(prisma, runId),
+        getRun: (runId) => getRun(prisma, runId),
+        bus
+      },
+      {
+        projectKey: key,
+        codeHash: collected.commitSha,
+        input: { kind: 'code', files: collected.files },
+        origin: { repoUrl: project.gitRepoUrl, branch: collected.branch, commitSha: collected.commitSha }
+      }
+    )
+    return {
+      ok: true,
+      runId: enqueued.runId,
+      ...(enqueued.queuePosition !== undefined ? { queuePosition: enqueued.queuePosition } : {})
+    }
+  }
+
   const managementDeps: ManagementDeps = {
     findProjectByKey: (key) => findProjectByKey(prisma, key),
     upsertProject: async (key, name, git) => {
@@ -230,48 +283,7 @@ const start = async (): Promise<void> => {
     createIntegration: (input) => createIntegration(prisma, input),
     updateIntegration: (id, patch) => updateIntegration(prisma, id, patch),
     deleteIntegration: (id) => deleteIntegration(prisma, id),
-    pullReview: async (key, options = {}) => {
-      const project = await findProjectByKey(prisma, key)
-      if (project === null) {
-        return { ok: false, reason: 'no-project' }
-      }
-      if (project.gitRepoUrl === null || project.gitRepoUrl.length === 0) {
-        return { ok: false, reason: 'no-git' }
-      }
-      const providerParsed = gitProviderSchema.safeParse(project.gitProvider)
-      const gitSource = {
-        provider: providerParsed.success ? providerParsed.data : null,
-        repoUrl: project.gitRepoUrl,
-        token: project.gitToken
-      }
-      // base+head → diff (yalnızca değişen dosyalar); aksi halde tüm branch.
-      const collected =
-        options.base !== undefined && options.head !== undefined
-          ? await cloneAndCollectDiff(gitSource, { base: options.base, head: options.head }).then(
-              (result) => ({ files: result.files, commitSha: result.headSha, branch: result.branch })
-            )
-          : await cloneAndCollect(gitSource, options.ref !== undefined ? { ref: options.ref } : {})
-      const enqueued = await enqueueReview(
-        {
-          findProjectByKey: (k) => findProjectByKey(prisma, k),
-          createRun: (input) => createRun(prisma, input),
-          getQueuePosition: (runId) => getQueuePosition(prisma, runId),
-          getRun: (runId) => getRun(prisma, runId),
-          bus
-        },
-        {
-          projectKey: key,
-          codeHash: collected.commitSha,
-          input: { kind: 'code', files: collected.files },
-          origin: { repoUrl: project.gitRepoUrl, branch: collected.branch, commitSha: collected.commitSha }
-        }
-      )
-      return {
-        ok: true,
-        runId: enqueued.runId,
-        ...(enqueued.queuePosition !== undefined ? { queuePosition: enqueued.queuePosition } : {})
-      }
-    }
+    pullReview
   }
 
   const chatDeps: ChatDeps = {
@@ -300,6 +312,19 @@ const start = async (): Promise<void> => {
     }
   }
 
+  const gitWebhookDeps: GitWebhookDeps = {
+    getProjectWebhookContext: async (key) => {
+      const project = await findProjectByKey(prisma, key)
+      if (project === null) {
+        return null
+      }
+      const providerParsed = gitProviderSchema.safeParse(project.gitProvider)
+      // İmza sırrı olarak projenin ingestToken'ı kullanılır (ayrı secret yok).
+      return { provider: providerParsed.success ? providerParsed.data : null, secret: project.ingestToken }
+    },
+    pullReview
+  }
+
   const app = buildApp({
     reviewDeps,
     runDeps,
@@ -307,6 +332,7 @@ const start = async (): Promise<void> => {
     chatDeps,
     authDeps,
     ingestDeps,
+    gitWebhookDeps,
     ...(env.COVORA_CORS_ORIGINS !== undefined ? { corsOrigins: env.COVORA_CORS_ORIGINS } : {})
   })
 
