@@ -8,6 +8,7 @@
 
 import type {
   AuditRecord,
+  CheckerInfo,
   CoverageConfig,
   CreateIntegrationInput,
   DashboardSummary,
@@ -221,6 +222,8 @@ export interface StudioApi {
   /** Bir review'ın tam coverage/gate dökümünü getirir (yoksa null). */
   getReviewOutcome(reviewId: string): Promise<ReviewOutcome | null>
   upsertProject(key: string, name: string, git?: ProjectGitInput): Promise<ProjectSummary>
+  /** Yerleşik deterministik/ArchUnit checker kataloğunu getirir (kural seçimi için). */
+  listCheckers(): Promise<readonly CheckerInfo[]>
   listPacks(): Promise<readonly Pack[]>
   createPack(input: CreatePackInput): Promise<Pack>
   deletePack(id: string): Promise<void>
@@ -521,6 +524,11 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
 
     async upsertProject(key, name, git) {
       return json<ProjectSummary>(await postJson('/projects', { key, name, ...git }))
+    },
+
+    async listCheckers() {
+      const data = await json<{ checkers: CheckerInfo[] }>(await authFetch('/checkers'))
+      return data.checkers
     },
 
     async listPacks() {

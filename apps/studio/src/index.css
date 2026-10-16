@@ -356,7 +356,8 @@ img {
 .select:focus {
   border-color: var(--accent);
 }
-.input--grow {
+.input--grow,
+.select--grow {
   flex: 1;
   min-width: 120px;
 }

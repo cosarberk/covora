@@ -195,6 +195,8 @@ export const registerManagementRoutes = (app: FastifyInstance, deps: ManagementD
     return reply.send({ rules: await deps.listRules(project.id) })
   })
 
+  app.get('/checkers', async () => ({ checkers: deps.listCheckers() }))
+
   app.get('/packs', async () => ({ packs: await deps.listPacks() }))
 
   app.post('/packs', async (request, reply) => {

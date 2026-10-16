@@ -7,7 +7,7 @@
  * alınır; worker onu arka planda işler ve ilerlemeyi canlı yayınlar.
  */
 
-import { builtinCodeCheckers } from '@covora/checkers'
+import { builtinCodeCheckers, CHECKER_CATALOG } from '@covora/checkers'
 import {
   assignPackToProject,
   cancelQueuedRun,
@@ -285,6 +285,7 @@ const start = async (): Promise<void> => {
     createIntegration: (input) => createIntegration(prisma, input),
     updateIntegration: (id, patch) => updateIntegration(prisma, id, patch),
     deleteIntegration: (id) => deleteIntegration(prisma, id),
+    listCheckers: () => CHECKER_CATALOG,
     pullReview
   }
 

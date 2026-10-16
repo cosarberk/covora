@@ -15,6 +15,7 @@ import type {
 } from '@covora/db'
 import type {
   AuditRecord,
+  CheckerInfo,
   CreateIntegrationInput,
   DashboardSummary,
   GitConnectionInput,
@@ -181,6 +182,8 @@ export interface ManagementDeps {
   ) => Promise<Integration | null>
   /** Bir bağlantıyı siler. */
   readonly deleteIntegration: (id: string) => Promise<void>
+  /** Yerleşik deterministik/ArchUnit checker kataloğunu döner (kural seçimi için). */
+  readonly listCheckers: () => readonly CheckerInfo[]
   /**
    * Projenin kayıtlı git bağlantısıyla depoyu çeker ve bir code review'ı kuyruğa
    * alır (dışarıdan dosya push etmeden). Proje/git yoksa `ok:false` döner; çekme

@@ -7,3 +7,4 @@
 
 export * from './code.js'
 export * from './registry.js'
+export * from './catalog.js'
