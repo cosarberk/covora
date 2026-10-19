@@ -96,6 +96,24 @@ export const CHECKER_CATALOG: readonly CheckerInfo[] = [
     languages: ['ts']
   },
   {
+    key: 'no-css',
+    title: 'CSS yasak (stiller obje olmalı)',
+    description:
+      'Harici stylesheet import\'u (.css/.scss/.sass/.less) ve className kullanımını yakalar; stiller React Native tarzı component içinde obje olarak yazılmalı.',
+    kind: 'code',
+    scope: 'changes',
+    languages: ['ts']
+  },
+  {
+    key: 'no-raw-html',
+    title: 'Ham HTML yasak (sadece Yeten UI)',
+    description:
+      'JSX\'te küçük-harfle başlayan DOM etiketlerini (<div>, <span>, <button>…) yakalar; her zaman Yeten UI bileşenleri (PascalCase) kullanılmalı.',
+    kind: 'code',
+    scope: 'changes',
+    languages: ['ts']
+  },
+  {
     key: 'required-project-structure',
     title: 'Zorunlu src klasör yapısı (ArchUnit)',
     description:

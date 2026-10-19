@@ -726,6 +726,60 @@ export const reactHookOrderChecker: CodeChecker = (files) => {
       }
 }
 
+/**
+ * CSS kullanımı yasak: stiller React Native tarzı, component/sayfa içinde obje
+ * olarak yazılmalı. Harici stylesheet import'u (`.css/.scss/.sass/.less`) ve
+ * `className=` kullanımı (harici CSS sınıfı) işaretlenir.
+ */
+export const noCssChecker: CodeChecker = (files) => {
+  const cssImport = /\b(?:import|require|from)\b[^\n]*['"`][^'"`]*\.(?:css|scss|sass|less)['"`]/
+  const classNameUse = /\bclassName\s*=/
+  const hits: LineHit[] = []
+  for (const file of files) {
+    const lines = file.content.split(/\r?\n/)
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!
+      if (cssImport.test(line)) {
+        hits.push({ path: file.path, line: i + 1, text: `CSS dosyası import — ${line.trim()}` })
+      } else if (classNameUse.test(line)) {
+        hits.push({ path: file.path, line: i + 1, text: `className kullanımı — ${line.trim()}` })
+      }
+    }
+  }
+  return hits.length === 0
+    ? { outcome: 'pass' }
+    : { outcome: 'fail', note: `${hits.length} CSS kullanımı (stil obje olmalı) — ${formatHits(hits)}` }
+}
+
+/**
+ * Ham HTML yasak: JSX'te küçük-harfle başlayan etiketler (DOM elemanları:
+ * `<div>`, `<span>`, `<button>`…) kullanılamaz; her zaman Yeten UI bileşenleri
+ * (PascalCase) kullanılmalı. React/TS konvansiyonu: küçük harf = DOM elemanı,
+ * büyük harf = bileşen. Generic (`Array<string>`) bir tanımlayıcıdan sonra
+ * geldiği için yakalanmaz.
+ */
+export const noRawHtmlChecker: CodeChecker = (files) => {
+  const tag = /(^|[^A-Za-z0-9_$.])<([a-z][a-zA-Z0-9-]*)(?=[\s/>])/g
+  const hits: LineHit[] = []
+  for (const file of files) {
+    if (!file.path.endsWith('.tsx') && !file.path.endsWith('.jsx')) {
+      continue
+    }
+    const lines = file.content.split(/\r?\n/)
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!
+      tag.lastIndex = 0
+      let match: RegExpExecArray | null
+      while ((match = tag.exec(line)) !== null) {
+        hits.push({ path: file.path, line: i + 1, text: `<${match[2]}> → Yeten UI bileşeni kullan` })
+      }
+    }
+  }
+  return hits.length === 0
+    ? { outcome: 'pass' }
+    : { outcome: 'fail', note: `${hits.length} ham HTML etiketi — ${formatHits(hits)}` }
+}
+
 // --- Plugin'e özel kurallar (manifest / vite / isim tutarlılığı) ---
 
 /** Eksiksiz ve kurallı bir `PluginManifest` (`src/index.ts`) olmalı. */

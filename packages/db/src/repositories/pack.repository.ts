@@ -157,6 +157,8 @@ const BUILTIN_PACKS: readonly BuiltinPack[] = [
       { key: 'max-file-lines', title: 'Dosya 300 satırı aşmamalı', evaluation: 'deterministic', severity: 'warning', weight: 1 },
       { key: 'i18n-no-bare-text', title: 'JSX içinde çıplak metin olmamalı (i18n)', evaluation: 'deterministic', severity: 'warning', weight: 2 },
       { key: 'react-hook-order', title: 'React: state hookları useEffect\'ten önce gelmeli', evaluation: 'deterministic', severity: 'warning', weight: 1 },
+      { key: 'no-css', title: 'CSS yasak (stiller obje olmalı)', evaluation: 'deterministic', severity: 'warning', weight: 2 },
+      { key: 'no-raw-html', title: 'Ham HTML yasak (sadece Yeten UI)', evaluation: 'deterministic', severity: 'blocker', weight: 3 },
       // Yapı / mimari (ArchUnit, scope=project)
       { key: 'required-project-structure', title: 'Zorunlu src klasör yapısı', evaluation: 'deterministic', scope: 'project', severity: 'blocker', weight: 3 },
       { key: 'folders-kebab-case', title: 'Tüm klasörler kebab-case', evaluation: 'deterministic', scope: 'project', severity: 'warning', weight: 2 },

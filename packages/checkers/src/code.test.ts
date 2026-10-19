@@ -16,10 +16,12 @@ import {
   layerDependenciesChecker,
   maxFileLinesChecker,
   noConsoleChecker,
+  noCssChecker,
   noDeepImportChecker,
   noDefaultExportChecker,
   noExplicitAnyChecker,
   noHardcodedUrlChecker,
+  noRawHtmlChecker,
   noTodoChecker,
   noTsIgnoreChecker,
   pluginManifestValidChecker,
@@ -213,6 +215,20 @@ describe('react / i18n kuralları', () => {
       { path: 'a.tsx', content: 'useEffect(() => {}, [])\nconst f = useCallback(() => {}, [])' }
     ]
     expect(reactHookOrderChecker(memo).outcome).toBe('pass')
+  })
+
+  it('noCss: css import ve className yasak, obje stil serbest', () => {
+    expect(noCssChecker([{ path: 'a.tsx', content: "import './styles.css'" }]).outcome).toBe('fail')
+    expect(noCssChecker([{ path: 'a.tsx', content: '<Box className="x" />' }]).outcome).toBe('fail')
+    expect(noCssChecker([{ path: 'a.tsx', content: 'const s = { color: "red" }' }]).outcome).toBe('pass')
+    expect(noCssChecker([{ path: 'a.tsx', content: '<Box style={{ color: "red" }} />' }]).outcome).toBe('pass')
+  })
+
+  it('noRawHtml: küçük-harf DOM etiketi yasak, bileşen ve generic serbest', () => {
+    expect(noRawHtmlChecker([{ path: 'a.tsx', content: '<div>x</div>' }]).outcome).toBe('fail')
+    expect(noRawHtmlChecker([{ path: 'a.tsx', content: 'return <Box>x</Box>' }]).outcome).toBe('pass')
+    // Generic tip (bir tanımlayıcıdan sonra) yanlış yakalanmamalı.
+    expect(noRawHtmlChecker([{ path: 'a.tsx', content: 'const x: Array<string> = []' }]).outcome).toBe('pass')
   })
 })
 
