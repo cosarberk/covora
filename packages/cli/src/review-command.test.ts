@@ -20,15 +20,25 @@ const options = {
   files: ['src/a.ts']
 }
 
-const stubFetch = (outcome: unknown, ok = true): void => {
+/**
+ * İki fazlı akışı mock'lar: POST /reviews → { runId }, ardından GET
+ * /reviews/:runId → verilen terminal run. `enqueueOk=false` ile enqueue hatası
+ * taklit edilir.
+ */
+const stubFlow = (run: unknown, enqueueOk = true): void => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => ({
-      ok,
-      status: ok ? 201 : 500,
-      statusText: ok ? 'Created' : 'Internal Server Error',
-      json: async () => outcome
-    }))
+    vi.fn(async (_url: string, init?: { method?: string }) => {
+      if (init?.method === 'POST') {
+        return {
+          ok: enqueueOk,
+          status: enqueueOk ? 202 : 500,
+          statusText: enqueueOk ? 'Accepted' : 'Internal Server Error',
+          json: async () => ({ runId: 'run-1', status: 'queued' })
+        }
+      }
+      return { ok: true, status: 200, statusText: 'OK', json: async () => run }
+    })
   )
 }
 
@@ -38,7 +48,10 @@ describe('runReviewCommand', () => {
   })
 
   it('gate geçtiğinde 0 döner', async () => {
-    stubFetch({ reviewId: 'r1', coverage: { score: 90, level: 'good' }, gate: { passed: true, reasons: [] } })
+    stubFlow({
+      status: 'succeeded',
+      outcome: { coverage: { score: 90, level: 'good' }, gate: { passed: true, reasons: [] } }
+    })
 
     const code = await runReviewCommand(options, () => {}, () => {})
 
@@ -46,10 +59,9 @@ describe('runReviewCommand', () => {
   })
 
   it('gate kaldığında 1 döner', async () => {
-    stubFetch({
-      reviewId: 'r1',
-      coverage: { score: 40, level: 'poor' },
-      gate: { passed: false, reasons: ['Skor düşük'] }
+    stubFlow({
+      status: 'succeeded',
+      outcome: { coverage: { score: 40, level: 'poor' }, gate: { passed: false, reasons: ['Skor düşük'] } }
     })
 
     const code = await runReviewCommand(options, () => {}, () => {})
@@ -57,8 +69,16 @@ describe('runReviewCommand', () => {
     expect(code).toBe(ReviewExitCode.gateFailed)
   })
 
-  it('sunucu hatasında 2 döner', async () => {
-    stubFetch({}, false)
+  it('enqueue başarısızsa 2 döner', async () => {
+    stubFlow({}, false)
+
+    const code = await runReviewCommand(options, () => {}, () => {})
+
+    expect(code).toBe(ReviewExitCode.error)
+  })
+
+  it('run sonuç üretmezse (failed) 2 döner', async () => {
+    stubFlow({ status: 'failed' })
 
     const code = await runReviewCommand(options, () => {}, () => {})
 
