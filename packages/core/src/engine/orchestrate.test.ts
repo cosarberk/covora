@@ -32,6 +32,7 @@ const makeRule = (overrides: Partial<Rule> & Pick<Rule, 'id'>): Rule => ({
   description: '',
   kind: 'ui',
   evaluation: 'llm',
+  scope: 'changes',
   severity: 'warning',
   weight: 1,
   ...overrides

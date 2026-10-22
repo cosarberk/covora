@@ -67,6 +67,7 @@ const uiRule = (id: string, evaluation: 'deterministic' | 'llm'): Rule => ({
   description: '',
   kind: 'ui',
   evaluation,
+  scope: 'changes',
   severity: 'warning',
   weight: 1
 })
