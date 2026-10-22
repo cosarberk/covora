@@ -40,6 +40,7 @@ const rule: Rule = {
   description: '',
   kind: 'code',
   evaluation: 'deterministic',
+  scope: 'changes',
   severity: 'warning',
   weight: 1
 }
