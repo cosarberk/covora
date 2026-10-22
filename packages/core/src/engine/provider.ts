@@ -10,6 +10,26 @@
 import type { ChecklistItem, ReviewInput, ReviewKind, RuleResult } from '@covora/types'
 
 /**
+ * LLM çağrısının ham izi (trace). Hata ayıklama/şeffaflık için modele gönderilen
+ * tam istemi ve modelden dönen ham (parse edilmemiş) yanıtı taşır; run log'una
+ * `debug` seviyesinde birebir yazılır.
+ */
+export interface LlmTrace {
+  /** Modele gönderilen tam istem (system + user; code'da dosya içeriği dahil). */
+  readonly prompt: string
+  /** Modelin döndürdüğü ham yanıt metni (JSON parse edilmeden önce). */
+  readonly rawResponse: string
+}
+
+/** {@link LlmProvider.fillChecklist} dönüşü: sonuçlar + opsiyonel ham iz. */
+export interface FillChecklistResult {
+  /** Her madde için değerlendirme sonucu. */
+  readonly results: readonly RuleResult[]
+  /** Modele giden istem ve ham yanıt (sağlayıcı sağlıyorsa). */
+  readonly trace?: LlmTrace
+}
+
+/**
  * Bir LLM sağlayıcısı. `kind`, sağlayıcının hangi review türünü işlediğini
  * belirtir; `fillChecklist` verilen maddeleri değerlendirip sonuçlarını döner.
  */
@@ -21,10 +41,10 @@ export interface LlmProvider {
    *
    * @param input - Review girdisi (ekran görüntüsü ya da kaynak dosyalar).
    * @param items - Değerlendirilecek checklist maddeleri.
-   * @returns Her madde için değerlendirme sonucu.
+   * @returns Her madde için değerlendirme sonucu ve (varsa) ham iz.
    */
   fillChecklist(
     input: ReviewInput,
     items: readonly ChecklistItem[]
-  ): Promise<readonly RuleResult[]>
+  ): Promise<FillChecklistResult>
 }

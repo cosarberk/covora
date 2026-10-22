@@ -16,6 +16,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import { makeIngestGuard, makeUserGuard, type IngestGuardDeps } from './auth/guard.js'
 import { registerAuthRoutes, type AuthDeps } from './routes/auth.js'
 import { registerChatRoutes, type ChatDeps } from './routes/chat.js'
+import { registerGitWebhookRoutes, type GitWebhookDeps } from './routes/git-webhook.js'
 import { registerHealthRoutes } from './routes/health.js'
 import { registerManagementRoutes } from './routes/management.js'
 import { registerReviewRoutes, type ReviewRoutesDeps } from './routes/reviews.js'
@@ -36,6 +37,8 @@ export interface AppDeps {
   readonly authDeps: AuthDeps
   /** Review ingest guard bağımlılıkları. */
   readonly ingestDeps: IngestGuardDeps
+  /** Gelen git webhook bağımlılıkları (PR/MR/push → otomatik review). */
+  readonly gitWebhookDeps: GitWebhookDeps
   /** CORS'a izin verilen origin'ler (virgülle ayrılmış; boş/`*` = tümü). */
   readonly corsOrigins?: string
 }
@@ -65,6 +68,12 @@ export const buildApp = (deps: AppDeps): FastifyInstance => {
   // Herkese açık: sağlık ve giriş.
   registerHealthRoutes(app)
   registerAuthRoutes(app, deps.authDeps)
+
+  // Gelen git webhook (herkese açık; kimlik imza/sır ile doğrulanır). İzole
+  // kapsam: ham gövde (Buffer) ayrıştırıcısı yalnızca burada geçerli olsun diye.
+  void app.register(async (scope) => {
+    registerGitWebhookRoutes(scope, deps.gitWebhookDeps)
+  })
 
   // Review ingest ve interaktif sohbet: proje bazlı token ile korunur
   // (mock-shell SDK / pipeline gibi makine istemcileri; kullanıcı JWT'si yok).

@@ -18,6 +18,7 @@
 
 import { z } from 'zod'
 
+import { managementRuleSchema } from './management-rule.js'
 import { reviewOriginSchema } from './review-origin.js'
 import { reviewKindSchema } from './rule.js'
 import { reviewOutcomeSchema } from './review.js'
@@ -197,7 +198,14 @@ export const reviewRunSchema = z.object({
    * Review'u tetikleyen köken bilgisi (ortam, MR/PR/commit bağlantısı, dal,
    * commit, kişi). Pipeline/CLI gönderdiyse dolu; tarayıcı/eski kayıtlarda yok.
    */
-  origin: reviewOriginSchema.optional()
+  origin: reviewOriginSchema.optional(),
+  /**
+   * Run çalışırken o türe (`kind`) ait kuralların anlık görüntüsü. Studio
+   * "Süreçler" akışı ve rapor, geçmiş run'ı güncel kurallarla değil bu
+   * snapshot'la çizer; böylece kural sonradan açılır/kapatılır/değiştirilirse
+   * geçmiş run aynen korunur. Eski kayıtlarda / henüz başlamamış run'da yok.
+   */
+  rulesSnapshot: z.array(managementRuleSchema).optional()
 })
 
 /** {@link reviewRunSchema} tip çıkarımı. */

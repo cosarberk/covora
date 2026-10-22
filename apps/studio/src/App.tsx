@@ -11,21 +11,22 @@
  * ve giriş akışı kullanılır.
  */
 
-import type { User } from '@covora/types'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { GitProvider, User } from '@covora/types'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createStudioApi, type ProjectSummary, type StudioApi } from './api/client.js'
 import { CommandPalette, type Command } from './components/CommandPalette.js'
 import { Icon, type IconName } from './components/Icon.js'
 import { Splitter } from './components/Splitter.js'
 import { DashboardPanel } from './components/DashboardPanel.js'
+import { IntegrationsPanel } from './components/IntegrationsPanel.js'
 import { IngestGuide } from './components/IngestGuide.js'
 import { Login } from './components/Login.js'
 import { ConfirmHost, ToastHost, confirmDialog, toast } from './components/overlays.js'
 import { PacksPanel } from './components/PacksPanel.js'
 import { ProcessGraph, ProcessInspector, ProcessRunList } from './components/processes/regions.js'
 import { useProcesses } from './components/processes/useProcesses.js'
-import { LOG_COLOR, formatTime } from './components/processes/graph.js'
+import { LOG_COLOR, copyToClipboard, formatTime, logsToText } from './components/processes/graph.js'
 import { ProjectPacksPanel } from './components/ProjectPacksPanel.js'
 import { ProvidersPanel } from './components/ProvidersPanel.js'
 import { ReviewsPanel } from './components/ReviewsPanel.js'
@@ -37,7 +38,7 @@ const serverUrl = import.meta.env.VITE_COVORA_SERVER_URL ?? ''
 const defaultApi = createStudioApi({ baseUrl: serverUrl })
 
 type Tab = 'packs' | 'rules' | 'reviews' | 'webhooks' | 'settings' | 'integration'
-type View = 'dashboard' | 'projects' | 'project' | 'providers' | 'packs' | 'processes'
+type View = 'dashboard' | 'projects' | 'project' | 'providers' | 'packs' | 'processes' | 'integrations'
 
 const PROJECT_TABS: readonly { readonly id: Tab; readonly icon: IconName; readonly label: string }[] = [
   { id: 'rules', icon: 'rules', label: 'Kurallar' },
@@ -53,7 +54,8 @@ const NAV: readonly { readonly id: View; readonly icon: IconName; readonly label
   { id: 'projects', icon: 'project', label: 'Projeler' },
   { id: 'processes', icon: 'flow', label: 'Süreçler' },
   { id: 'packs', icon: 'packages', label: 'Review Paketleri' },
-  { id: 'providers', icon: 'ai', label: 'AI Sağlayıcılar' }
+  { id: 'providers', icon: 'ai', label: 'AI Sağlayıcılar' },
+  { id: 'integrations', icon: 'plug', label: 'Bağlamalar' }
 ]
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -86,6 +88,13 @@ export const App = ({
   const [error, setError] = useState<string | null>(null)
   const [newKey, setNewKey] = useState('')
   const [newName, setNewName] = useState('')
+  const [newGitProvider, setNewGitProvider] = useState<GitProvider | ''>('')
+  const [newGitRepoUrl, setNewGitRepoUrl] = useState('')
+  const [newGitToken, setNewGitToken] = useState('')
+  const [pullKey, setPullKey] = useState<string | null>(null)
+  const [pullRef, setPullRef] = useState('')
+  const [pullBase, setPullBase] = useState('')
+  const [pulling, setPulling] = useState(false)
   const [copied, setCopied] = useState(false)
   const [cmdkOpen, setCmdkOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
@@ -182,6 +191,34 @@ export const App = ({
   // Süreçler durumu (yalnızca o görünüm aktifken ağ/akış yapar).
   const proc = useProcesses(api, view === 'processes')
 
+  // Konsol otomatik kaydırma: yeni log geldikçe (ve run ilk açıldığında konsol
+  // zaten doluyken) her zaman dibe kaydır. rAF ile layout/paint sonrası çalışır
+  // ki scrollHeight güncel olsun; aksi halde ilk açılışta top'ta takılı kalıyordu.
+  const consoleBodyRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = consoleBodyRef.current
+    if (el === null) {
+      return
+    }
+    const id = requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight
+    })
+    return () => cancelAnimationFrame(id)
+  }, [proc.logs, proc.openRunId])
+
+  // Konsoldaki tüm logları panoya kopyalar.
+  const copyConsoleLogs = useCallback((): void => {
+    if (proc.logs.length === 0) {
+      toast.info('Kopyalanacak log yok')
+      return
+    }
+    void copyToClipboard(logsToText(proc.logs)).then((ok) =>
+      ok
+        ? toast.success(`${proc.logs.length} log satırı kopyalandı`)
+        : toast.error('Kopyalanamadı (pano erişimi yok)')
+    )
+  }, [proc.logs])
+
   const openProject = useCallback((key: string): void => {
     setSelected(key)
     setView('project')
@@ -200,15 +237,63 @@ export const App = ({
     if (key.length === 0 || name.length === 0) {
       return
     }
+    const repoUrl = newGitRepoUrl.trim()
+    const token = newGitToken.trim()
+    // Git bağlantısı opsiyonel: yalnızca sağlayıcı ya da adres verildiyse gönder.
+    const git =
+      newGitProvider !== '' || repoUrl.length > 0
+        ? {
+            ...(newGitProvider !== '' ? { gitProvider: newGitProvider } : {}),
+            ...(repoUrl.length > 0 ? { gitRepoUrl: repoUrl } : {}),
+            ...(token.length > 0 ? { gitToken: token } : {})
+          }
+        : undefined
     try {
-      await api.upsertProject(key, name)
+      await api.upsertProject(key, name, git)
       setNewKey('')
       setNewName('')
+      setNewGitProvider('')
+      setNewGitRepoUrl('')
+      setNewGitToken('')
       setAddOpen(false)
       await loadProjects()
       openProject(key)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Bilinmeyen hata')
+    }
+  }
+
+  const startPull = async (): Promise<void> => {
+    if (pullKey === null) {
+      return
+    }
+    const ref = pullRef.trim()
+    const base = pullBase.trim()
+    // base verildiyse diff modu; o zaman head (dal alanı) zorunlu.
+    if (base.length > 0 && ref.length === 0) {
+      toast.error('Diff için "dal (head)" alanını da doldur')
+      return
+    }
+    setPulling(true)
+    try {
+      const options =
+        base.length > 0
+          ? { base, head: ref }
+          : ref.length > 0
+            ? { ref }
+            : {}
+      const result = await api.pullReview(pullKey, options)
+      toast.success(
+        `${base.length > 0 ? 'Diff' : 'Depo'} çekildi, review kuyruğa alındı (#${result.runId.slice(-6)})`
+      )
+      setPullKey(null)
+      setPullRef('')
+      setPullBase('')
+      setView('processes')
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'Depo çekilemedi')
+    } finally {
+      setPulling(false)
     }
   }
 
@@ -298,46 +383,143 @@ export const App = ({
     }
     if (view === 'projects') {
       return (
-        <div className="projgrid">
-          <button type="button" className="projcard projcard--add" onClick={() => setAddOpen((open) => !open)}>
-            <Icon name="plus" size={20} />
-            <span>Yeni proje</span>
-          </button>
+        <>
+          <div className="projgrid">
+            <button type="button" className="projcard projcard--add" onClick={() => setAddOpen(true)}>
+              <Icon name="plus" size={20} />
+              <span>Yeni proje</span>
+            </button>
+            {projects.map((project) => (
+              <div key={project.id} className="projcard">
+                <button type="button" className="projcard__open" onClick={() => openProject(project.key)}>
+                  <span className="projcard__icon"><Icon name="project" size={16} /></span>
+                  <span className="projcard__name">{project.name}</span>
+                  <span className="projcard__key mono">{project.key}</span>
+                </button>
+                <div className="projcard__foot">
+                  <button type="button" className="link-button" onClick={() => openProject(project.key)}>Aç</button>
+                  {project.gitRepoUrl !== null && (
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => {
+                        setPullRef('')
+                        setPullBase('')
+                        setPullKey(project.key)
+                      }}
+                    >
+                      Depodan review
+                    </button>
+                  )}
+                  <button type="button" className="link-button link-button--danger" onClick={() => void removeProject(project.key)}>Sil</button>
+                </div>
+              </div>
+            ))}
+            {projects.length === 0 && (
+              <div className="state projgrid__empty">Henüz proje yok. "Yeni proje" ile başla.</div>
+            )}
+          </div>
           {addOpen && (
-            <form className="projcard projcard--form" onSubmit={(event) => void createProject(event)}>
-              <input
-                className="input input--sm"
-                placeholder="anahtar (örn. web-app)"
-                value={newKey}
-                onChange={(event) => setNewKey(event.target.value)}
-                autoFocus
-              />
-              <input
-                className="input input--sm"
-                placeholder="görünen ad"
-                value={newName}
-                onChange={(event) => setNewName(event.target.value)}
-              />
-              <button className="button button--sm" type="submit">Oluştur</button>
-            </form>
-          )}
-          {projects.map((project) => (
-            <div key={project.id} className="projcard">
-              <button type="button" className="projcard__open" onClick={() => openProject(project.key)}>
-                <span className="projcard__icon"><Icon name="project" size={16} /></span>
-                <span className="projcard__name">{project.name}</span>
-                <span className="projcard__key mono">{project.key}</span>
-              </button>
-              <div className="projcard__foot">
-                <button type="button" className="link-button" onClick={() => openProject(project.key)}>Aç</button>
-                <button type="button" className="link-button link-button--danger" onClick={() => void removeProject(project.key)}>Sil</button>
+            <div className="modal-backdrop" onClick={() => setAddOpen(false)}>
+              <div className="modal" onClick={(event) => event.stopPropagation()}>
+                <div className="modal__title">Yeni proje</div>
+                <form className="modal__form" onSubmit={(event) => void createProject(event)}>
+                  <input
+                    className="input input--sm"
+                    placeholder="anahtar (örn. web-app)"
+                    value={newKey}
+                    onChange={(event) => setNewKey(event.target.value)}
+                    autoFocus
+                  />
+                  <input
+                    className="input input--sm"
+                    placeholder="görünen ad"
+                    value={newName}
+                    onChange={(event) => setNewName(event.target.value)}
+                  />
+                  <div className="projcard__git">
+                    <span className="projcard__git-label">Git bağlantısı (opsiyonel)</span>
+                    <select
+                      className="select select--sm"
+                      value={newGitProvider}
+                      onChange={(event) => setNewGitProvider(event.target.value as GitProvider | '')}
+                    >
+                      <option value="">sağlayıcı yok</option>
+                      <option value="github">GitHub</option>
+                      <option value="gitlab">GitLab</option>
+                      <option value="gitea">Gitea</option>
+                      <option value="generic">Jenerik</option>
+                    </select>
+                    <input
+                      className="input input--sm"
+                      placeholder="depo adresi (https://github.com/firma/repo)"
+                      value={newGitRepoUrl}
+                      onChange={(event) => setNewGitRepoUrl(event.target.value)}
+                    />
+                    <input
+                      className="input input--sm"
+                      type="password"
+                      placeholder="erişim jetonu (opsiyonel)"
+                      value={newGitToken}
+                      onChange={(event) => setNewGitToken(event.target.value)}
+                    />
+                  </div>
+                  <div className="modal__actions">
+                    <button type="button" className="btn-secondary" onClick={() => setAddOpen(false)}>
+                      Vazgeç
+                    </button>
+                    <button className="button" type="submit">Oluştur</button>
+                  </div>
+                </form>
               </div>
             </div>
-          ))}
-          {projects.length === 0 && !addOpen && (
-            <div className="state projgrid__empty">Henüz proje yok. "Yeni proje" ile başla.</div>
           )}
-        </div>
+          {pullKey !== null && (
+            <div className="modal-backdrop" onClick={() => !pulling && setPullKey(null)}>
+              <div className="modal" onClick={(event) => event.stopPropagation()}>
+                <div className="modal__title">Depodan review başlat</div>
+                <div className="modal__msg">
+                  Covora, <b>{pullKey}</b> projesinin git bağlantısıyla depoyu kendisi çeker.
+                  Taban boşsa tüm branch; taban dolduysa yalnızca değişen dosyalar (diff) incelenir.
+                </div>
+                <form
+                  className="modal__form"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void startPull()
+                  }}
+                >
+                  <input
+                    className="input input--sm"
+                    placeholder="dal / head (boşsa varsayılan dal)"
+                    value={pullRef}
+                    onChange={(event) => setPullRef(event.target.value)}
+                    autoFocus
+                  />
+                  <input
+                    className="input input--sm"
+                    placeholder="karşılaştırma tabanı / base (opsiyonel → diff)"
+                    value={pullBase}
+                    onChange={(event) => setPullBase(event.target.value)}
+                  />
+                  <div className="modal__actions">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setPullKey(null)}
+                      disabled={pulling}
+                    >
+                      Vazgeç
+                    </button>
+                    <button className="button" type="submit" disabled={pulling}>
+                      {pulling ? 'Çekiliyor…' : 'Başlat'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </>
       )
     }
     if (view === 'packs') {
@@ -345,6 +527,9 @@ export const App = ({
     }
     if (view === 'providers') {
       return <ProvidersPanel api={api} />
+    }
+    if (view === 'integrations') {
+      return <IntegrationsPanel api={api} />
     }
     if (selectedProject === null) {
       return <div className="state">Bir proje seçili değil. Projeler ekranından bir proje aç.</div>
@@ -412,6 +597,23 @@ export const App = ({
             <li>Modeli "RAM'e yükle" ile ısıtıp ilk-istek gecikmesini düşür.</li>
             <li>"Sağlık" ile uç noktanın erişilebilirliğini test et.</li>
             <li>AI'sız (deterministik) kurallar sağlayıcı gerektirmez.</li>
+          </ul>
+        </>
+      )
+    }
+    if (view === 'integrations') {
+      return (
+        <>
+          <div className="props__name">Bağlamalar</div>
+          <p className="props__desc">
+            Jira gibi 3. parti sistemleri çalışma-alanı geneli bağla. Dış sistemin
+            uç noktası ve gizli erişim jetonu burada tutulur.
+          </p>
+          <div className="props__group">Notlar</div>
+          <ul className="props__hints">
+            <li>Git sağlayıcıları (GitHub/GitLab) buraya değil, projenin git bağlantısına girer.</li>
+            <li>Jeton gizlidir; kaydedildikten sonra geri gösterilmez.</li>
+            <li>Otomasyon kuralları (task → MR kontrolü, çıktıdan bug kaydı) yakında.</li>
           </ul>
         </>
       )
@@ -628,8 +830,19 @@ export const App = ({
             <div className="area__head">
               <Icon name="reviews" size={13} />
               <span className="area__title">Konsol</span>
+              {view === 'processes' && proc.openRunId !== null && proc.logs.length > 0 && (
+                <button
+                  type="button"
+                  className="icon-button area__head-action"
+                  title="Tüm logları kopyala"
+                  aria-label="Tüm logları kopyala"
+                  onClick={copyConsoleLogs}
+                >
+                  <Icon name="copy" size={13} />
+                </button>
+              )}
             </div>
-            <div className="area__body console-body">
+            <div className="area__body console-body" ref={consoleBodyRef}>
               {view === 'processes' && proc.openRunId !== null ? (
                 proc.logs.length === 0 ? (
                   <div className="cline cline__dim">Log bekleniyor…</div>
@@ -640,7 +853,12 @@ export const App = ({
                       {line.stepKey !== undefined && (
                         <span className="cline__step">{line.stepKey}</span>
                       )}
-                      <span style={{ color: LOG_COLOR[line.level] }}>{line.message}</span>
+                      <span
+                        className="cline__msg"
+                        style={{ color: LOG_COLOR[line.level] }}
+                      >
+                        {line.message}
+                      </span>
                     </div>
                   ))
                 )

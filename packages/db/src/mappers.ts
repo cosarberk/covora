@@ -6,12 +6,15 @@
 
 import {
   coverageConfigSchema,
+  integrationProviderSchema,
+  managementRuleSchema,
   reviewOriginSchema,
   userRoleSchema,
   webhookEventSchema,
   type AuditRecord,
   type CoverageConfig,
   type GatePolicy,
+  type Integration,
   type ManagementRule,
   type Pack,
   type ProviderConfig,
@@ -26,6 +29,7 @@ import {
   type Webhook
 } from '@covora/types'
 import type {
+  Integration as PrismaIntegration,
   Pack as PrismaPack,
   ProjectConfig as PrismaProjectConfig,
   ProviderConfig as PrismaProviderConfig,
@@ -54,6 +58,7 @@ export const toDomainRule = (rule: PrismaRule): Rule => ({
   description: rule.description,
   kind: rule.kind,
   evaluation: rule.evaluation,
+  scope: rule.scope === 'project' ? 'project' : 'changes',
   severity: rule.severity,
   weight: rule.weight
 })
@@ -72,6 +77,7 @@ export const toManagementRule = (rule: PrismaRule): ManagementRule => ({
   description: rule.description,
   kind: rule.kind,
   evaluation: rule.evaluation,
+  scope: rule.scope === 'project' ? 'project' : 'changes',
   severity: rule.severity,
   weight: rule.weight,
   enabled: rule.enabled,
@@ -151,6 +157,24 @@ export const toProviderConfig = (provider: PrismaProviderConfig): ProviderConfig
   active: provider.active
 })
 
+/**
+ * Prisma bağlantısını domain okuma modeline dönüştürür. Gizli jeton dönülmez;
+ * yalnızca varlığı `hasToken` ile bildirilir (provider `hasApiKey` deseniyle
+ * tutarlı). Geçersiz `provider` değeri gelirse `generic`'e düşer.
+ */
+export const toIntegration = (integration: PrismaIntegration): Integration => {
+  const parsed = integrationProviderSchema.safeParse(integration.provider)
+  return {
+    id: integration.id,
+    provider: parsed.success ? parsed.data : 'generic',
+    name: integration.name,
+    baseUrl: integration.baseUrl,
+    hasToken: integration.token !== null && integration.token.length > 0,
+    enabled: integration.enabled,
+    createdAt: integration.createdAt.toISOString()
+  }
+}
+
 /** Prisma run adımını domain modeline dönüştürür. */
 export const toRunStep = (step: PrismaRunStep): RunStep => ({
   key: step.key,
@@ -203,6 +227,18 @@ const originField = (raw: unknown): { readonly origin?: ReviewOrigin } => {
   return origin !== undefined ? { origin } : {}
 }
 
+/**
+ * Saklanan `rulesSnapshot` JSON'ını doğrular. Geçersiz/boş ise alanı atlar
+ * (spread için boş nesne) — eski kayıtlar güncel kurallara düşsün diye.
+ */
+const rulesSnapshotField = (raw: unknown): { readonly rulesSnapshot?: ManagementRule[] } => {
+  if (raw === null || raw === undefined) {
+    return {}
+  }
+  const parsed = managementRuleSchema.array().safeParse(raw)
+  return parsed.success && parsed.data.length > 0 ? { rulesSnapshot: parsed.data } : {}
+}
+
 export const toReviewRun = (
   run: PrismaReviewRun,
   projectKey: string,
@@ -226,7 +262,8 @@ export const toReviewRun = (
   gatePassed: review?.gatePassed ?? null,
   delta: run.delta,
   ...(run.error !== null ? { error: run.error } : {}),
-  ...originField(run.origin)
+  ...originField(run.origin),
+  ...rulesSnapshotField(run.rulesSnapshot)
 })
 
 /** Prisma run kaydını (bağlı review özetiyle) liste satırına dönüştürür. */

@@ -6,3 +6,4 @@
  */
 
 export * from './review-command.js'
+export * from './collect.js'

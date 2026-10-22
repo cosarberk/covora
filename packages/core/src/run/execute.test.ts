@@ -67,6 +67,7 @@ const uiRule = (id: string, evaluation: 'deterministic' | 'llm'): Rule => ({
   description: '',
   kind: 'ui',
   evaluation,
+  scope: 'changes',
   severity: 'warning',
   weight: 1
 })
@@ -78,7 +79,7 @@ const baseDeps = (
 ): ReviewRunExecutionDeps => ({
   rules: [],
   input: uiInput,
-  provider: { kind: 'ui', fillChecklist: async () => [] },
+  provider: { kind: 'ui', fillChecklist: async () => ({ results: [] }) },
   config: { partialCredit: 0.5, levels: [{ id: 'poor', minScore: 0 }] },
   policy: {
     minScore: 60,
@@ -99,8 +100,9 @@ describe('executeReviewRun', () => {
     const persistReview = vi.fn(async () => 'rev-42')
     const provider: LlmProvider = {
       kind: 'ui',
-      fillChecklist: async (_input: ReviewInput, items: readonly ChecklistItem[]) =>
-        items.map((item): RuleResult => ({ ruleId: item.ruleId, outcome: 'pass' }))
+      fillChecklist: async (_input: ReviewInput, items: readonly ChecklistItem[]) => ({
+        results: items.map((item): RuleResult => ({ ruleId: item.ruleId, outcome: 'pass' }))
+      })
     }
 
     const result = await executeReviewRun(

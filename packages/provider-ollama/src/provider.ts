@@ -6,13 +6,29 @@
  * biçimde `fail` sayar.
  */
 
-import type { LlmProvider } from '@covora/core'
+import type { FillChecklistResult, LlmProvider } from '@covora/core'
 import { checklistOutcomeSchema, type ChecklistItem, type ReviewInput, type RuleResult } from '@covora/types'
 import { z } from 'zod'
 
 import { callOllamaChat } from './client.js'
 import { ollamaProviderConfigSchema, type OllamaProviderInput } from './config.js'
-import { buildChecklistMessages, checklistResponseFormat } from './prompt.js'
+import { buildChecklistMessages, checklistResponseFormat, type OllamaMessage } from './prompt.js'
+
+/**
+ * Mesaj dizisini log'a yazılabilir tek bir metne çevirir. Görüntüler (base64
+ * ekran görüntüsü) çok büyük olduğundan içerikleri değil yalnızca boyutları
+ * yazılır; metin içerik (code dosyaları dahil) birebir korunur.
+ */
+const messagesToPromptText = (messages: readonly OllamaMessage[]): string =>
+  messages
+    .map((message) => {
+      const images =
+        message.images !== undefined && message.images.length > 0
+          ? `\n[images: ${message.images.map((img) => `${Math.round((img.length * 3) / 4 / 1024)} KB`).join(', ')}]`
+          : ''
+      return `### ${message.role}\n${message.content}${images}`
+    })
+    .join('\n\n')
 
 /** Modelin döndürmesi beklenen structured yanıt. */
 const checklistResponseSchema = z.object({
@@ -60,6 +76,72 @@ const parseResults = (content: string): Map<string, RuleResult> => {
   return map
 }
 
+/** Sonuç şiddet sırası: fail en kötü. */
+const OUTCOME_RANK: Record<RuleResult['outcome'], number> = { pass: 0, partial: 1, fail: 2 }
+
+/** İki sonuçtan daha kötü olanı seçer (birleştirme için). */
+const worstOutcome = (a: RuleResult['outcome'], b: RuleResult['outcome']): RuleResult['outcome'] =>
+  OUTCOME_RANK[a] >= OUTCOME_RANK[b] ? a : b
+
+/**
+ * Birden fazla (yanlış etiketli) model sonucunu tek bir kurala birleştirir.
+ * Sonuç = en kötü outcome; not = tüm notlar + modelin kullandığı etiketler.
+ */
+const mergeInto = (ruleId: string, list: readonly RuleResult[]): RuleResult => {
+  const outcome = list.reduce<RuleResult['outcome']>((acc, r) => worstOutcome(acc, r.outcome), 'pass')
+  const notes = list.map((r) => r.note).filter((n): n is string => n !== undefined && n.length > 0)
+  const labels = list.map((r) => r.ruleId).join(', ')
+  const body = notes.length > 0 ? notes.join(' ') : 'Model not vermedi.'
+  return { ruleId, outcome, note: `${body} (model alt-değerlendirmeleri: ${labels})` }
+}
+
+/**
+ * Model yanıtını checklist maddeleriyle uzlaştırır. Önce ruleId birebir eşleşir;
+ * eşleşmeyen maddeler için model yine de (yanlış etiketle) sonuç döndürmüşse
+ * yanıtı o maddeye bağlar — tek madde sorulduysa tüm yanıtları o maddeye
+ * BİRLEŞTİRİR, çok madde sorulduysa sırayla eşler. Böylece modelin gerçek
+ * değerlendirmesi "sonuç döndürmedi" denip çöpe atılmaz. Yalnızca model hiçbir
+ * geçerli sonuç üretmediyse madde başarısız sayılır.
+ */
+export const reconcileChecklist = (
+  items: readonly ChecklistItem[],
+  resultsByRuleId: Map<string, RuleResult>
+): RuleResult[] => {
+  const itemIds = new Set(items.map((item) => item.ruleId))
+  const unmatched = [...resultsByRuleId.values()].filter((r) => !itemIds.has(r.ruleId))
+  let cursor = 0
+  return items.map((item): RuleResult => {
+    const exact = resultsByRuleId.get(item.ruleId)
+    if (exact !== undefined) {
+      return exact
+    }
+    if (unmatched.length === 0) {
+      return {
+        ruleId: item.ruleId,
+        outcome: 'fail',
+        note: 'Model geçerli bir sonuç döndürmedi (boş ya da şema dışı yanıt).'
+      }
+    }
+    if (items.length === 1) {
+      return mergeInto(item.ruleId, unmatched)
+    }
+    const positional = unmatched[cursor]
+    cursor += 1
+    if (positional !== undefined) {
+      return {
+        ruleId: item.ruleId,
+        outcome: positional.outcome,
+        note: `${positional.note ?? 'Model not vermedi.'} (model etiketi: ${positional.ruleId})`
+      }
+    }
+    return {
+      ruleId: item.ruleId,
+      outcome: 'fail',
+      note: 'Model bu maddeye karşılık bir sonuç döndürmedi.'
+    }
+  })
+}
+
 /**
  * Ollama tabanlı bir {@link LlmProvider} oluşturur.
  *
@@ -74,26 +156,20 @@ export const createOllamaProvider = (config: OllamaProviderInput): LlmProvider =
     async fillChecklist(
       input: ReviewInput,
       items: readonly ChecklistItem[]
-    ): Promise<readonly RuleResult[]> {
+    ): Promise<FillChecklistResult> {
       if (items.length === 0) {
-        return []
+        return { results: [] }
       }
 
       const messages = buildChecklistMessages(input, items)
       const content = await callOllamaChat(resolvedConfig, messages, checklistResponseFormat)
       const resultsByRuleId = parseResults(content)
+      const results = reconcileChecklist(items, resultsByRuleId)
 
-      return items.map((item) => {
-        const result = resultsByRuleId.get(item.ruleId)
-        if (result === undefined) {
-          return {
-            ruleId: item.ruleId,
-            outcome: 'fail',
-            note: 'Model bu madde için sonuç döndürmedi'
-          }
-        }
-        return result
-      })
+      return {
+        results,
+        trace: { prompt: messagesToPromptText(messages), rawResponse: content }
+      }
     }
   }
 }

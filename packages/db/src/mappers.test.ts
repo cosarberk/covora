@@ -17,6 +17,7 @@ const prismaRule: PrismaRule = {
   description: 'Açıklama',
   kind: 'ui',
   evaluation: 'llm',
+  scope: 'changes',
   severity: 'warning',
   weight: 2,
   prompt: null,

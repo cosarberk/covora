@@ -18,7 +18,7 @@ import type {
   RunStep,
   RunSummary
 } from '@covora/types'
-import type { NodeChange, XYPosition } from '@xyflow/react'
+import { useNodesState, type OnNodesChange } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { RunInput, RunReport, StudioApi } from '../../api/client.js'
@@ -29,6 +29,7 @@ import { COL_W, ROW_H, STATUS_STROKE, formatDuration, type Edge, type Node } fro
 export type SelectedNode =
   | { readonly kind: 'input' }
   | { readonly kind: 'result' }
+  | { readonly kind: 'report' }
   | { readonly kind: 'step'; readonly key: string }
   | { readonly kind: 'rule'; readonly key: string }
 
@@ -36,6 +37,42 @@ const TERMINAL: readonly ReviewRun['status'][] = ['succeeded', 'degraded', 'fail
 
 /** Kural node id'si (step anahtarlarıyla çakışmasın diye önekli). */
 const ruleNodeId = (key: string): string => `rule:${key}`
+
+/** İki node `data` nesnesini (düz, sığ) eşitlik için karşılaştırır. */
+const shallowEqualData = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
+  const keys = Object.keys(a)
+  if (keys.length !== Object.keys(b).length) {
+    return false
+  }
+  for (const key of keys) {
+    if (a[key] !== b[key]) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * Yeni türetilen node'ları öncekilerle id'ye göre birleştirir: sürüklenen
+ * pozisyon ve React Flow ölçümleri korunur, `data` yalnız gerçekten
+ * değiştiyse yenilenir. Değişmeyen node'lar **aynı referansı** koruduğu için
+ * React Flow onları yeniden render etmez (tek node sürüklerken tüm grafiğin
+ * render olmasının önüne geçer).
+ */
+const mergeNodes = (prev: Node[], next: Node[]): Node[] => {
+  const prevById = new Map(prev.map((node) => [node.id, node]))
+  return next.map((node) => {
+    const old = prevById.get(node.id)
+    if (old === undefined) {
+      return node
+    }
+    const data = shallowEqualData(old.data, node.data) ? old.data : node.data
+    if (data === old.data && old.type === node.type) {
+      return old
+    }
+    return { ...old, type: node.type, data }
+  })
+}
 
 /** {@link useProcesses} dönüşü. */
 export interface ProcessesState {
@@ -57,7 +94,7 @@ export interface ProcessesState {
   readonly clearSelection: () => void
   readonly nodes: Node[]
   readonly edges: Edge[]
-  readonly onNodesChange: (changes: readonly NodeChange[]) => void
+  readonly onNodesChange: OnNodesChange<Node>
   readonly resetLayout: () => void
   readonly stepByKey: Map<string, RunStep>
   readonly cancel: () => void
@@ -76,7 +113,6 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
   const [report, setReport] = useState<RunReport | null>(null)
   const [rules, setRules] = useState<readonly ManagementRule[]>([])
   const [selected, setSelected] = useState<SelectedNode | null>(null)
-  const [positions, setPositions] = useState<Record<string, XYPosition>>({})
   const [tick, setTick] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
@@ -117,9 +153,11 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     setLogs([])
     setInput(null)
     setReport(null)
-    setRules([])
+    // NOT: `rules` burada sıfırlanmaz. Kurallar run'a değil PROJEYE bağlı ve
+    // yalnızca `projectKey` değişince yeniden çekilir (aşağıdaki effect). Burada
+    // sıfırlarsak, aynı proje içinde başka/yeni run'a geçişte projectKey
+    // değişmediği için fetch tetiklenmez ve kural node'ları kaybolurdu.
     setSelected(null)
-    setPositions({})
 
     const unsubscribe = api.streamRun(openRunId, (event) => {
       if (!active) {
@@ -259,10 +297,18 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     [input]
   )
 
+  // Akışın/raporun kaynağı: run bir snapshot taşıyorsa (çalıştığı andaki kural
+  // hali) onu kullan; yoksa (eski kayıt / henüz başlamamış run) güncel kurallara
+  // düş. Böylece geçmiş run, kural sonradan açılıp kapatılsa bile aynen korunur.
+  const effectiveRules = useMemo<readonly ManagementRule[]>(
+    () => run?.rulesSnapshot ?? rules,
+    [run, rules]
+  )
+
   // Bu run'ın türüne ait kurallar, değerlendirme tipine göre ayrılmış.
   const relevantRules = useMemo(
-    () => (runKind === null ? [] : rules.filter((rule) => rule.kind === runKind)),
-    [rules, runKind]
+    () => (runKind === null ? [] : effectiveRules.filter((rule) => rule.kind === runKind)),
+    [effectiveRules, runKind]
   )
   const detRules = useMemo(
     () => relevantRules.filter((rule) => rule.evaluation === 'deterministic'),
@@ -282,10 +328,11 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     return map
   }, [report])
 
-  // Node'lar: input → ingest → (det/llm adımları + kural node'ları) → coverage
-  // → gate → persist → notify → result. Dinamik düzen; sürükleme konumları
-  // `positions` ile override edilir.
-  const nodes = useMemo<Node[]>(() => {
+  // Arzu edilen node düzeni + verisi: input → ingest → (det/llm adımları +
+  // kural node'ları) → coverage → gate → persist → notify → result. Bu fonksiyon
+  // yalnız hedef node'ları üretir; sürükleme pozisyonları React Flow state'inde
+  // yaşar ve aşağıdaki sync efekti id'ye göre merge eder.
+  const computeNodes = useCallback((): Node[] => {
     if (run === null) {
       return []
     }
@@ -294,17 +341,19 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     const R = detRules.length
     const L = llmRules.length
     const groupGap = R > 0 && L > 0 ? 56 : 0
-    const detY = detRules.map((_, i) => i * ROW_H)
-    const llmBase = R * ROW_H + groupGap
-    const llmY = llmRules.map((_, j) => llmBase + j * ROW_H)
+    // Deterministik kurallar merkezden YUKARI, AI kuralları merkezden AŞAĞI
+    // yayılır. Böylece iki grup birbirini aşağı itmez; det üstte, AI altta,
+    // merkez (girdi/sonuç hattı) etrafında dengeli durur.
+    const detY = detRules.map((_, i) => -groupGap / 2 - (R - i) * ROW_H)
+    const llmY = llmRules.map((_, j) => groupGap / 2 + (j + 1) * ROW_H)
     const allY = [...detY, ...llmY]
     const minY = allY.length > 0 ? Math.min(...allY) : 0
     const maxY = allY.length > 0 ? Math.max(...allY) : 0
     const midY = (minY + maxY) / 2
-    const detStepY = R > 0 ? (detY[0]! + detY[R - 1]!) / 2 : midY
-    const llmStepY = L > 0 ? (llmY[0]! + llmY[L - 1]!) / 2 : midY
-
-    const at = (id: string, x: number, y: number): XYPosition => positions[id] ?? { x, y }
+    // Kural olmayan tür için step'i `midY`'ye koymak det/llm kartlarını üst üste
+    // bindiriyordu; o durumda sabit bir offset'le ayır (det üstte, llm altta).
+    const detStepY = R > 0 ? (detY[0]! + detY[R - 1]!) / 2 : midY - ROW_H / 2
+    const llmStepY = L > 0 ? (llmY[0]! + llmY[L - 1]!) / 2 : midY + ROW_H / 2
 
     const stepDetail = (step: RunStep, ruleCount: number): string | null => {
       if (step.status === 'running') {
@@ -322,11 +371,15 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     list.push({
       id: 'input',
       type: 'reviewInput',
-      position: at('input', 0, midY),
+      position: { x: 0, y: midY },
       data: {
         kind: run.kind,
         thumb,
         fileCount: input !== null && input.input.kind === 'code' ? input.input.files.length : null,
+        fileNames:
+          input !== null && input.input.kind === 'code'
+            ? input.input.files.map((file) => file.path)
+            : null,
         hasSource: run.origin?.refUrl !== undefined,
         selected: selected?.kind === 'input'
       }
@@ -353,7 +406,7 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
       list.push({
         id: step.key,
         type: 'step',
-        position: at(step.key, col * COL_W, y),
+        position: { x: col * COL_W, y },
         data: {
           name: step.name,
           status: step.status,
@@ -370,12 +423,14 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
       list.push({
         id: ruleNodeId(rule.key),
         type: 'rule',
-        position: at(ruleNodeId(rule.key), 3 * COL_W, detY[i]!),
+        position: { x: 3 * COL_W, y: detY[i]! },
         data: {
           title: rule.title,
           evaluation: rule.evaluation,
+          scope: rule.scope,
           severity: rule.severity,
           weight: rule.weight,
+          enabled: rule.enabled,
           outcome: outcomeByKey.get(rule.key) ?? null,
           running: detStep?.status === 'running',
           selected: selected?.kind === 'rule' && selected.key === rule.key
@@ -386,12 +441,14 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
       list.push({
         id: ruleNodeId(rule.key),
         type: 'rule',
-        position: at(ruleNodeId(rule.key), 3 * COL_W, llmY[j]!),
+        position: { x: 3 * COL_W, y: llmY[j]! },
         data: {
           title: rule.title,
           evaluation: rule.evaluation,
+          scope: rule.scope,
           severity: rule.severity,
           weight: rule.weight,
+          enabled: rule.enabled,
           outcome: outcomeByKey.get(rule.key) ?? null,
           running: llmStep?.status === 'running',
           selected: selected?.kind === 'rule' && selected.key === rule.key
@@ -403,7 +460,7 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     list.push({
       id: 'result',
       type: 'result',
-      position: at('result', 8 * COL_W, midY),
+      position: { x: 8 * COL_W, y: midY },
       data: {
         score: run.score ?? null,
         level: run.level ?? null,
@@ -412,8 +469,29 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
       }
     })
 
+    // Rapor (markdown özet) — run bittiğinde içerik hazırdır.
+    list.push({
+      id: 'report',
+      type: 'report',
+      position: { x: 9 * COL_W, y: midY },
+      data: {
+        ready:
+          run.status === 'succeeded' || run.status === 'degraded' || run.status === 'failed',
+        selected: selected?.kind === 'report'
+      }
+    })
+
     return list
-  }, [run, input, thumb, selected, detRules, llmRules, outcomeByKey, positions, tick])
+  }, [run, input, thumb, selected, detRules, llmRules, outcomeByKey, tick])
+
+  // React Flow kontrollü node state'i: sürükleme/ölçüm değişiklikleri
+  // `onNodesChange` (applyNodeChanges) ile uygulanır; veri değişince aşağıdaki
+  // efekt id-bazlı merge eder. Böylece her render'da node'lar sıfırdan
+  // üretilmez, tek node sürüklerken yalnız o node render olur.
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  useEffect(() => {
+    setNodes((prev) => mergeNodes(prev, computeNodes()))
+  }, [computeNodes, setNodes])
 
   // Kenarlar: omurga + kural dalları. Uç noktalardan biri çalışıyorsa animasyonlu.
   const edges = useMemo<Edge[]>(() => {
@@ -433,6 +511,11 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
       animated: running(srcKey) || running(tgtKey),
       style: { stroke: strokeFor(srcKey), strokeWidth: 2 }
     })
+    // Pasif kuralın okları: tam görünür kalır ama yeşil değil, nötr gri; animasyonsuz.
+    const ruleEdge = (edge: Edge, ruleEnabled: boolean): Edge =>
+      ruleEnabled
+        ? edge
+        : { ...edge, animated: false, style: { stroke: 'var(--border-strong)', strokeWidth: 2 } }
 
     const list: Edge[] = []
     const hasDet = run.steps.some((s) => s.key === 'deterministic')
@@ -445,8 +528,9 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
         list.push(mk('deterministic', 'coverage', 'deterministic', 'coverage'))
       }
       for (const rule of detRules) {
-        list.push(mk('deterministic', ruleNodeId(rule.key), 'deterministic', 'deterministic'))
-        list.push(mk(ruleNodeId(rule.key), 'coverage', 'deterministic', 'coverage'))
+        const rid = ruleNodeId(rule.key)
+        list.push(ruleEdge(mk('deterministic', rid, 'deterministic', 'deterministic'), rule.enabled))
+        list.push(ruleEdge(mk(rid, 'coverage', 'deterministic', 'coverage'), rule.enabled))
       }
     }
     if (hasLlm) {
@@ -455,8 +539,9 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
         list.push(mk('llm', 'coverage', 'llm', 'coverage'))
       }
       for (const rule of llmRules) {
-        list.push(mk('llm', ruleNodeId(rule.key), 'llm', 'llm'))
-        list.push(mk(ruleNodeId(rule.key), 'coverage', 'llm', 'coverage'))
+        const rid = ruleNodeId(rule.key)
+        list.push(ruleEdge(mk('llm', rid, 'llm', 'llm'), rule.enabled))
+        list.push(ruleEdge(mk(rid, 'coverage', 'llm', 'coverage'), rule.enabled))
       }
     }
     if (!hasDet && !hasLlm) {
@@ -466,6 +551,7 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
     list.push(mk('gate', 'persist', 'gate', 'persist'))
     list.push(mk('persist', 'notify', 'persist', 'notify'))
     list.push(mk('notify', 'result', 'notify', 'notify'))
+    list.push(mk('result', 'report', 'notify', 'notify'))
     return list
   }, [run, stepByKey, detRules, llmRules])
 
@@ -486,6 +572,8 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
       setSelected({ kind: 'input' })
     } else if (id === 'result') {
       setSelected({ kind: 'result' })
+    } else if (id === 'report') {
+      setSelected({ kind: 'report' })
     } else if (id.startsWith('rule:')) {
       setSelected({ kind: 'rule', key: id.slice('rule:'.length) })
     } else {
@@ -495,19 +583,8 @@ export const useProcesses = (api: StudioApi, enabled: boolean): ProcessesState =
 
   const clearSelection = useCallback(() => setSelected(null), [])
 
-  const onNodesChange = useCallback((changes: readonly NodeChange[]): void => {
-    setPositions((cur) => {
-      let next = cur
-      for (const change of changes) {
-        if (change.type === 'position' && change.position !== undefined) {
-          next = { ...next, [change.id]: change.position }
-        }
-      }
-      return next
-    })
-  }, [])
-
-  const resetLayout = useCallback(() => setPositions({}), [])
+  // Düzeni sıfırla: sürükleme pozisyonlarını atıp hesaplanan düzene dön.
+  const resetLayout = useCallback(() => setNodes(computeNodes()), [computeNodes, setNodes])
 
   const cancel = useCallback((): void => {
     if (openRunId === null) {

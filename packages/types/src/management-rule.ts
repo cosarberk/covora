@@ -8,7 +8,7 @@
 
 import { z } from 'zod'
 
-import { ruleEvaluationTypeSchema, reviewKindSchema } from './rule.js'
+import { ruleEvaluationTypeSchema, reviewKindSchema, reviewScopeSchema } from './rule.js'
 import { severitySchema } from './severity.js'
 
 /** Studio'da yönetilen kural. */
@@ -25,6 +25,8 @@ export const managementRuleSchema = z.object({
   kind: reviewKindSchema,
   /** Değerlendirme tipi. */
   evaluation: ruleEvaluationTypeSchema,
+  /** Kapsam (changes / project=ArchUnit). */
+  scope: reviewScopeSchema.default('changes'),
   /** Önem derecesi. */
   severity: severitySchema,
   /** Coverage ağırlığı. */

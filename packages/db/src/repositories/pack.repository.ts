@@ -5,7 +5,7 @@
  * paketlerin seed'i.
  */
 
-import type { Pack, ReviewKind, RuleEvaluationType, Severity } from '@covora/types'
+import type { Pack, ReviewKind, ReviewScope, RuleEvaluationType, Severity } from '@covora/types'
 import type { PrismaClient } from '@prisma/client'
 
 import { toPack } from '../mappers.js'
@@ -115,6 +115,8 @@ interface BuiltinRule {
   readonly key: string
   readonly title: string
   readonly evaluation: RuleEvaluationType
+  /** Kapsam; verilmezse changes. project = ArchUnit (tüm depo). */
+  readonly scope?: ReviewScope
   readonly severity: Severity
   readonly weight: number
 }
@@ -134,7 +136,41 @@ const BUILTIN_PACKS: readonly BuiltinPack[] = [
     rules: [
       { key: 'no-todo', title: 'Kodda TODO/FIXME olmamalı', evaluation: 'deterministic', severity: 'warning', weight: 2 },
       { key: 'no-console', title: 'console.* çağrısı olmamalı', evaluation: 'deterministic', severity: 'warning', weight: 1 },
-      { key: 'no-hardcoded-url', title: 'Gömülü URL olmamalı', evaluation: 'deterministic', severity: 'warning', weight: 1 }
+      { key: 'no-hardcoded-url', title: 'Gömülü URL olmamalı', evaluation: 'deterministic', severity: 'warning', weight: 1 },
+      { key: 'no-cyclic-imports', title: 'Dairesel import olmamalı (ArchUnit)', evaluation: 'deterministic', scope: 'project', severity: 'blocker', weight: 3 }
+    ]
+  },
+  {
+    // Yeten plugin konvansiyonu: tüm yapı/mimari/manifest kuralları tek pakette.
+    // Bir plugin projesine abone edilince elle kural girmeye gerek kalmaz.
+    key: 'plugin-standartlari',
+    name: 'FE Plugin Standartları',
+    kind: 'code',
+    rules: [
+      // Hijyen (dosya-içi)
+      { key: 'no-todo', title: 'Kodda TODO/FIXME olmamalı', evaluation: 'deterministic', severity: 'warning', weight: 2 },
+      { key: 'no-console', title: 'console.* çağrısı olmamalı', evaluation: 'deterministic', severity: 'warning', weight: 2 },
+      { key: 'no-hardcoded-url', title: 'Gömülü URL olmamalı', evaluation: 'deterministic', severity: 'warning', weight: 2 },
+      { key: 'no-explicit-any', title: "TypeScript 'any' kullanılmamalı", evaluation: 'deterministic', severity: 'warning', weight: 2 },
+      { key: 'no-ts-ignore', title: '@ts-ignore/@ts-nocheck olmamalı', evaluation: 'deterministic', severity: 'warning', weight: 2 },
+      { key: 'no-default-export', title: 'Default export olmamalı (barrel uyumu)', evaluation: 'deterministic', severity: 'warning', weight: 2 },
+      { key: 'max-file-lines', title: 'Dosya 300 satırı aşmamalı', evaluation: 'deterministic', severity: 'warning', weight: 1 },
+      { key: 'i18n-no-bare-text', title: 'JSX içinde çıplak metin olmamalı (i18n)', evaluation: 'deterministic', severity: 'warning', weight: 2 },
+      { key: 'react-hook-order', title: 'React: state hookları useEffect\'ten önce gelmeli', evaluation: 'deterministic', severity: 'warning', weight: 1 },
+      { key: 'no-css', title: 'CSS yasak (stiller obje olmalı)', evaluation: 'deterministic', severity: 'warning', weight: 2 },
+      { key: 'no-raw-html', title: 'Ham HTML yasak (sadece Yeten UI)', evaluation: 'deterministic', severity: 'blocker', weight: 3 },
+      // Yapı / mimari (ArchUnit, scope=project)
+      { key: 'required-project-structure', title: 'Zorunlu src klasör yapısı', evaluation: 'deterministic', scope: 'project', severity: 'blocker', weight: 3 },
+      { key: 'folders-kebab-case', title: 'Tüm klasörler kebab-case', evaluation: 'deterministic', scope: 'project', severity: 'warning', weight: 2 },
+      { key: 'all-files-are-index', title: 'Tüm dosyalar index olmalı', evaluation: 'deterministic', scope: 'project', severity: 'warning', weight: 2 },
+      { key: 'barrel-structure', title: 'Barrel export yapısı zorunlu', evaluation: 'deterministic', scope: 'project', severity: 'blocker', weight: 3 },
+      { key: 'no-deep-import', title: 'Deep import yasak', evaluation: 'deterministic', scope: 'project', severity: 'blocker', weight: 3 },
+      { key: 'layer-dependencies', title: 'Katman bağımlılık kuralları', evaluation: 'deterministic', scope: 'project', severity: 'blocker', weight: 3 },
+      { key: 'no-cyclic-imports', title: 'Dairesel import olmamalı', evaluation: 'deterministic', scope: 'project', severity: 'blocker', weight: 3 },
+      // Plugin'e özel
+      { key: 'plugin-manifest-valid', title: 'PluginManifest eksiksiz ve kurallı', evaluation: 'deterministic', scope: 'project', severity: 'blocker', weight: 3 },
+      { key: 'plugin-vite-config', title: 'vite.config plugin build kuralları', evaluation: 'deterministic', scope: 'project', severity: 'blocker', weight: 3 },
+      { key: 'plugin-name-consistency', title: 'Plugin isim tutarlılığı', evaluation: 'deterministic', scope: 'project', severity: 'warning', weight: 2 }
     ]
   },
   {
@@ -171,10 +207,17 @@ export const ensureBuiltinPacks = async (prisma: PrismaClient): Promise<void> =>
           title: rule.title,
           kind: builtin.kind,
           evaluation: rule.evaluation,
+          scope: rule.scope ?? 'changes',
           severity: rule.severity,
           weight: rule.weight
         },
-        update: { title: rule.title }
+        update: {
+          title: rule.title,
+          evaluation: rule.evaluation,
+          scope: rule.scope ?? 'changes',
+          severity: rule.severity,
+          weight: rule.weight
+        }
       })
     }
   }

@@ -9,6 +9,7 @@ import type {
   AuditRecord,
   ManagementRule,
   ReviewKind,
+  ReviewScope,
   RuleEvaluationType,
   Rule,
   Severity
@@ -31,6 +32,8 @@ export interface CreateRuleData {
   readonly kind: ReviewKind
   /** Değerlendirme tipi. */
   readonly evaluation: RuleEvaluationType
+  /** Kapsam (changes / project=ArchUnit); verilmezse changes. */
+  readonly scope?: ReviewScope
   /** Önem derecesi. */
   readonly severity: Severity
   /** Coverage ağırlığı. */
@@ -120,6 +123,7 @@ export const createRule = async (
       description: data.description ?? '',
       kind: data.kind,
       evaluation: data.evaluation,
+      scope: data.scope ?? 'changes',
       severity: data.severity,
       weight: data.weight,
       prompt: data.prompt ?? null,

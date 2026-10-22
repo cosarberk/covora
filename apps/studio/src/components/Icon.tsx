@@ -20,6 +20,7 @@ export type IconName =
   | 'logout'
   | 'plug'
   | 'copy'
+  | 'download'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   dashboard: (
@@ -104,6 +105,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <rect x="9" y="9" width="11" height="11" rx="1.5" />
       <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 3v12" />
+      <path d="M7 10l5 5 5-5" />
+      <path d="M4 20h16" />
     </>
   )
 }

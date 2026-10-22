@@ -114,12 +114,16 @@ export const ProvidersPanel = ({ api }: ProvidersPanelProps): React.JSX.Element 
 
   const [warming, setWarming] = useState<Record<string, boolean>>({})
   const mounted = useRef(true)
-  useEffect(
-    () => () => {
+  // StrictMode (dev) komponenti mount→unmount→remount eder. Yalnızca cleanup'ta
+  // false yazıp remount'ta true'ya geri almazsak mounted.current kalıcı false
+  // kalır; o zaman health/poll sonuçları (if (mounted.current)) hiç yazılmaz ve
+  // "kontrol ediliyor…" sonsuza kadar asılı kalır. Bu yüzden mount'ta geri aç.
+  useEffect(() => {
+    mounted.current = true
+    return () => {
       mounted.current = false
-    },
-    []
-  )
+    }
+  }, [])
 
   const checkHealth = async (id: string): Promise<void> => {
     setHealth((current) => ({ ...current, [id]: 'loading' }))

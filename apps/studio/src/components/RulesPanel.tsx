@@ -10,9 +10,9 @@
 
 import type {
   AuditRecord,
+  CheckerInfo,
   ManagementRule,
   ReviewKind,
-  RuleEvaluationType,
   Severity
 } from '@covora/types'
 import { Fragment, useCallback, useEffect, useState } from 'react'
@@ -45,6 +45,7 @@ const makeEmptyForm = (kind: ReviewKind): CreateRuleInput => ({
   description: '',
   kind,
   evaluation: 'llm',
+  scope: 'changes',
   severity: 'warning',
   weight: 1
 })
@@ -58,6 +59,7 @@ export const RulesPanel = ({
   emptyLabel
 }: RulesPanelProps): React.JSX.Element => {
   const [rules, setRules] = useState<readonly ManagementRule[]>([])
+  const [checkers, setCheckers] = useState<readonly CheckerInfo[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState<CreateRuleInput>(makeEmptyForm(defaultKind))
@@ -88,6 +90,26 @@ export const RulesPanel = ({
   useEffect(() => {
     void load()
   }, [load])
+
+  // Deterministik/ArchUnit kural seçimi için yerleşik checker kataloğu (sadece
+  // oluşturma görünümünde gerekir).
+  useEffect(() => {
+    if (onCreate === undefined) {
+      return
+    }
+    let active = true
+    api
+      .listCheckers()
+      .then((list) => {
+        if (active) {
+          setCheckers(list)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [api, onCreate])
 
   const patchRule = async (ruleId: string, patch: UpdateRuleInput): Promise<void> => {
     setError(null)
@@ -161,28 +183,70 @@ export const RulesPanel = ({
       {onCreate !== undefined && (
         <form className="rule-form rule-form--card" onSubmit={(event) => void submit(event)}>
           <div className="rule-form__row">
-            <input
-              className="input"
-              placeholder="anahtar (örn. header-exists)"
-              value={form.key}
-              onChange={(event) => setForm({ ...form, key: event.target.value })}
-            />
+            <select
+              className="select"
+              value={form.scope === 'project' ? 'arch' : form.evaluation === 'llm' ? 'ai' : 'det'}
+              onChange={(event) => {
+                const type = event.target.value
+                // Tür değişince checker-bağlı alanları sıfırla (yanlış eşleşmeyi önle).
+                setForm({
+                  ...form,
+                  evaluation: type === 'ai' ? 'llm' : 'deterministic',
+                  scope: type === 'arch' ? 'project' : 'changes',
+                  ...(type === 'ai' ? {} : { key: '', title: '' })
+                })
+              }}
+            >
+              <option value="ai">AI-yargı</option>
+              <option value="det">Deterministik</option>
+              {defaultKind === 'code' && <option value="arch">ArchUnit (proje-geneli)</option>}
+            </select>
+            {form.evaluation === 'llm' ? (
+              <input
+                className="input"
+                placeholder="anahtar (örn. layout-tutarli)"
+                value={form.key}
+                onChange={(event) => setForm({ ...form, key: event.target.value })}
+              />
+            ) : (
+              <select
+                className="select select--grow"
+                value={form.key}
+                onChange={(event) => {
+                  const chosen = checkers.find((checker) => checker.key === event.target.value)
+                  if (chosen === undefined) {
+                    setForm({ ...form, key: '' })
+                    return
+                  }
+                  setForm({
+                    ...form,
+                    key: chosen.key,
+                    title: chosen.title,
+                    description: chosen.description,
+                    scope: chosen.scope
+                  })
+                }}
+              >
+                <option value="">— checker seç —</option>
+                {checkers
+                  .filter(
+                    (checker) =>
+                      checker.kind === defaultKind &&
+                      checker.scope === (form.scope === 'project' ? 'project' : 'changes')
+                  )
+                  .map((checker) => (
+                    <option key={checker.key} value={checker.key}>
+                      {checker.title}
+                    </option>
+                  ))}
+              </select>
+            )}
             <input
               className="input input--grow"
               placeholder="başlık"
               value={form.title}
               onChange={(event) => setForm({ ...form, title: event.target.value })}
             />
-            <select
-              className="select"
-              value={form.evaluation}
-              onChange={(event) =>
-                setForm({ ...form, evaluation: event.target.value as RuleEvaluationType })
-              }
-            >
-              <option value="llm">AI-yargı</option>
-              <option value="deterministic">Deterministik</option>
-            </select>
             <select
               className="select"
               value={form.severity}
@@ -248,9 +312,9 @@ export const RulesPanel = ({
                   <td>
                     <span
                       className={`badge ${rule.evaluation === 'llm' ? 'badge--ai' : ''}`}
-                      title={rule.kind}
+                      title={rule.scope === 'project' ? 'ArchUnit (proje-geneli)' : rule.kind}
                     >
-                      {rule.evaluation === 'llm' ? 'AI' : 'DET'}
+                      {rule.scope === 'project' ? 'ARCH' : rule.evaluation === 'llm' ? 'AI' : 'DET'}
                     </span>
                   </td>
                   <td>

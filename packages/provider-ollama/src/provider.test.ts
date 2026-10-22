@@ -45,7 +45,7 @@ describe('createOllamaProvider', () => {
     )
     const provider = createOllamaProvider(config)
 
-    const results = await provider.fillChecklist(input, items)
+    const { results } = await provider.fillChecklist(input, items)
 
     expect(results).toHaveLength(2)
     expect(results.find((r) => r.ruleId === 'a')?.outcome).toBe('pass')
@@ -56,7 +56,7 @@ describe('createOllamaProvider', () => {
     stubOllama(JSON.stringify({ results: [{ ruleId: 'a', outcome: 'pass' }] }))
     const provider = createOllamaProvider(config)
 
-    const results = await provider.fillChecklist(input, items)
+    const { results } = await provider.fillChecklist(input, items)
 
     expect(results.find((r) => r.ruleId === 'b')?.outcome).toBe('fail')
   })
@@ -65,7 +65,7 @@ describe('createOllamaProvider', () => {
     stubOllama('bu bir json değil')
     const provider = createOllamaProvider(config)
 
-    const results = await provider.fillChecklist(input, items)
+    const { results } = await provider.fillChecklist(input, items)
 
     expect(results.every((r) => r.outcome === 'fail')).toBe(true)
   })
@@ -80,7 +80,7 @@ describe('createOllamaProvider', () => {
   it('boş checklist için ağ çağrısı yapmaz', async () => {
     const provider = createOllamaProvider(config)
 
-    const results = await provider.fillChecklist(input, [])
+    const { results } = await provider.fillChecklist(input, [])
 
     expect(results).toEqual([])
     expect(mockedPostJson).not.toHaveBeenCalled()

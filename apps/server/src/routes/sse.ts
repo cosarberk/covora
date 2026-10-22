@@ -36,11 +36,15 @@ export const streamRunEvents = async (
 ): Promise<void> => {
   reply.hijack()
   const res = reply.raw
+  // hijack sonrası @fastify/cors onSend hook'u çalışmaz; CORS header'ını elle
+  // ekle (cookie/credential yok, isteğin Origin'ini yansıtmak güvenli).
+  const origin = request.headers.origin
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no'
+    'X-Accel-Buffering': 'no',
+    ...(origin !== undefined ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {})
   })
 
   const send = (event: RunEvent): void => {

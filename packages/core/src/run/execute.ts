@@ -17,6 +17,7 @@ import type {
   ReviewInput,
   ReviewKind,
   ReviewOutcome,
+  ReviewScope,
   Rule,
   RuleResult,
   RunStatus
@@ -186,9 +187,25 @@ const resolveLlm = async (
 
   const startedAt = Date.now()
   try {
-    const results = await provider.fillChecklist(input, rules.map(toChecklistItem))
+    const { results, trace } = await provider.fillChecklist(input, rules.map(toChecklistItem))
     const ms = Date.now() - startedAt
+    // Ham iz (şeffaflık): modele giden tam istem ve modelin döndürdüğü ham yanıt
+    // birebir loglanır. "sonuç döndürmedi" gibi durumların gerçek sebebi burada
+    // görülür (örn. model ruleId'yi yanlış döndürmüş ya da geçersiz JSON).
+    if (trace !== undefined) {
+      await sink.log('debug', `Modele gönderilen istem:\n${trace.prompt}`, 'llm')
+      await sink.log('debug', `Model ham yanıtı:\n${trace.rawResponse}`, 'llm')
+    }
     await sink.log('info', `AI yanıt verdi: ${results.length} sonuç (${(ms / 1000).toFixed(1)} sn)`, 'llm')
+    // Ham yanıtın "toparlanmış" (ayrıştırılmış) hali: her maddenin okunur sonucu.
+    const summary = results
+      .map((result) => {
+        const label = ruleById.get(result.ruleId)?.title ?? result.ruleId
+        const note = result.note !== undefined && result.note.length > 0 ? ` — ${result.note}` : ''
+        return `  • ${label} [${result.ruleId}]: ${outcomeLabel(result.outcome)}${note}`
+      })
+      .join('\n')
+    await sink.log('info', `Ayrıştırılmış sonuç:\n${summary}`, 'llm')
     for (const result of results) {
       const rule = ruleById.get(result.ruleId)
       const label = rule?.title ?? result.ruleId
@@ -239,7 +256,15 @@ export const executeReviewRun = async (
 
   await sink.runStarted()
 
-  const relevantRules = deps.rules.filter((rule) => rule.kind === kind)
+  // İnceleme kapsamı: tüm depo çekildiyse 'project' (ArchUnit kuralları da koşar),
+  // diff/kısmi dosyada 'changes' (proje-geneli kurallar eksik grafikle koşmaz).
+  const mode: ReviewScope = input.kind === 'code' ? input.mode ?? 'changes' : 'changes'
+  // project modda tüm kurallar; changes modda proje-geneli (ArchUnit) hariç.
+  // scope tanımsızsa (eski/dışarıdan kural) güvenli varsayılan: changes.
+  const inScope = (rule: Rule): boolean => (mode === 'project' ? true : rule.scope !== 'project')
+  const relevantRules = deps.rules.filter((rule) => rule.kind === kind && inScope(rule))
+  const skippedProjectRules =
+    mode === 'project' ? 0 : deps.rules.filter((rule) => rule.kind === kind && rule.scope === 'project').length
   const deterministicRules = relevantRules.filter((rule) => rule.evaluation === 'deterministic')
   const llmRules = relevantRules.filter((rule) => rule.evaluation === 'llm')
 
@@ -254,9 +279,21 @@ export const executeReviewRun = async (
   await sink.log('info', inputDesc, 'ingest')
   await sink.log(
     'info',
+    `Kapsam: ${mode === 'project' ? 'proje-geneli (ArchUnit dahil)' : 'değişiklik (changes)'}`,
+    'ingest'
+  )
+  await sink.log(
+    'info',
     `${relevantRules.length} kural değerlendirilecek — ${deterministicRules.length} deterministik, ${llmRules.length} AI-yargı`,
     'ingest'
   )
+  if (skippedProjectRules > 0) {
+    await sink.log(
+      'info',
+      `${skippedProjectRules} proje-geneli (ArchUnit) kural, changes kapsamında atlandı (tam depo gerekli)`,
+      'ingest'
+    )
+  }
   const totalWeightAll = relevantRules.reduce((sum, rule) => sum + rule.weight, 0)
   for (const rule of relevantRules) {
     await sink.log(

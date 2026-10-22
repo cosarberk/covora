@@ -9,7 +9,13 @@ import type { ReviewKind, ReviewOrigin, ReviewSource } from '@covora/types'
 import { Background, Controls, MiniMap, Panel, ReactFlow, type Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
-import { confirmDialog } from '../overlays.js'
+import { useMemo, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+
+import { Icon } from '../Icon.js'
+import { confirmDialog, toast } from '../overlays.js'
+import { buildRunReportMarkdown } from './report-md.js'
 import {
   LOG_COLOR,
   NODE_TYPES,
@@ -17,9 +23,38 @@ import {
   RUN_STATUS_LABEL,
   STEP_STATUS_LABEL,
   approxKb,
+  copyToClipboard,
   formatDuration,
-  formatTime
+  formatTime,
+  logsToText
 } from './graph.js'
+import type { RunLogLine } from '@covora/types'
+
+/** Verilen log satırlarını panoya kopyalar ve kısa geri bildirim verir. */
+const copyLogLines = (lines: readonly RunLogLine[]): void => {
+  if (lines.length === 0) {
+    toast.info('Kopyalanacak log yok')
+    return
+  }
+  void copyToClipboard(logsToText(lines)).then((ok) =>
+    ok
+      ? toast.success(`${lines.length} log satırı kopyalandı`)
+      : toast.error('Kopyalanamadı (pano erişimi yok)')
+  )
+}
+
+/** Log bölümü başlığı için küçük "kopyala" ikon butonu. */
+const CopyLogsButton = ({ lines }: { readonly lines: readonly RunLogLine[] }) => (
+  <button
+    type="button"
+    className="icon-button logs-copy"
+    title="Bu bölümün loglarını kopyala"
+    aria-label="Logları kopyala"
+    onClick={() => copyLogLines(lines)}
+  >
+    <Icon name="copy" size={12} />
+  </button>
+)
 import type { ProcessesState } from './useProcesses.js'
 
 /** Gezgin: proje + tür filtresi ve run kartları. */
@@ -197,6 +232,143 @@ const OriginBlock = ({ origin }: { readonly origin: ReviewOrigin }): React.JSX.E
   )
 }
 
+/** Code girdisinde bir dosyanın içeriğini satır numaralı, salt-okunur gösterir. */
+const CodeViewer = ({ content }: { readonly content: string }): React.JSX.Element => {
+  const lines = content.split('\n')
+  return (
+    <pre className="code-view">
+      <code>
+        {lines.map((line, index) => (
+          <span key={index} className="code-view__line">
+            <span className="code-view__ln">{index + 1}</span>
+            <span className="code-view__txt">{line === '' ? ' ' : line}</span>
+          </span>
+        ))}
+      </code>
+    </pre>
+  )
+}
+
+/**
+ * Rapor node'u detayı: seçili run'dan Markdown üretir, önizleme/kaynak sekmeli
+ * gösterir; üstte panoya kopyalama ve .md indirme.
+ */
+const ReportPanel = ({ proc }: { readonly proc: ProcessesState }): React.JSX.Element => {
+  const { run, report, rules } = proc
+  const [tab, setTab] = useState<'preview' | 'source'>('preview')
+  const md = useMemo(
+    () => (run !== null ? buildRunReportMarkdown(run, report, rules) : ''),
+    [run, report, rules]
+  )
+  if (run === null) {
+    return <div className="props__desc">Rapor için bir run seçili olmalı.</div>
+  }
+  const copy = (): void => {
+    void copyToClipboard(md).then((ok) =>
+      ok ? toast.success('Rapor kopyalandı') : toast.error('Kopyalanamadı (pano erişimi yok)')
+    )
+  }
+  const download = (): void => {
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `rapor-${run.codeHash}.md`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+  }
+  return (
+    <div className="inspector">
+      <div className="report-md__bar">
+        <div className="seg">
+          <button
+            type="button"
+            className={`seg__btn${tab === 'preview' ? ' seg__btn--on' : ''}`}
+            onClick={() => setTab('preview')}
+          >
+            Önizleme
+          </button>
+          <button
+            type="button"
+            className={`seg__btn${tab === 'source' ? ' seg__btn--on' : ''}`}
+            onClick={() => setTab('source')}
+          >
+            Kaynak
+          </button>
+        </div>
+        <div className="report-md__actions">
+          <button
+            type="button"
+            className="icon-button"
+            title="Panoya kopyala"
+            aria-label="Kopyala"
+            onClick={copy}
+          >
+            <Icon name="copy" size={13} />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            title="Markdown indir (.md)"
+            aria-label="İndir"
+            onClick={download}
+          >
+            <Icon name="download" size={13} />
+          </button>
+        </div>
+      </div>
+      {tab === 'preview' ? (
+        <div className="md-preview">
+          <div
+            className={`report-hero${
+              run.gatePassed === true
+                ? ' report-hero--pass'
+                : run.gatePassed === false
+                  ? ' report-hero--fail'
+                  : ''
+            }`}
+          >
+            <div className="report-hero__score">
+              <span className="report-hero__num">
+                {run.score === null || run.score === undefined ? '—' : run.score.toFixed(1)}
+              </span>
+              <span className="report-hero__level">{run.level ?? '—'}</span>
+            </div>
+            <div className="report-hero__badges">
+              <span
+                className={`badge ${
+                  run.gatePassed === true
+                    ? 'badge--pass'
+                    : run.gatePassed === false
+                      ? 'badge--fail'
+                      : ''
+                }`}
+              >
+                {run.gatePassed === null || run.gatePassed === undefined
+                  ? 'Gate —'
+                  : run.gatePassed
+                    ? 'Gate GEÇTİ'
+                    : 'Gate KALDI'}
+              </span>
+              <span className="report-hero__tag">{run.kind}</span>
+              <span className="report-hero__tag">
+                {formatDuration(run.startedAt, run.finishedAt) ?? '—'}
+              </span>
+            </div>
+          </div>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
+        </div>
+      ) : (
+        <pre className="code-view md-source">
+          <code>{md}</code>
+        </pre>
+      )}
+    </div>
+  )
+}
+
 /** Özellikler: seçili node'un detayı (girdi / adım / sonuç) ya da run özeti. */
 export const ProcessInspector = ({ proc }: { readonly proc: ProcessesState }): React.JSX.Element => {
   const { run, selected, logs, input, thumb, report, stepByKey, rules } = proc
@@ -276,19 +448,21 @@ export const ProcessInspector = ({ proc }: { readonly proc: ProcessesState }): R
         </div>
       )
     }
+    const files = input.input.files
     return (
       <div className="inspector">
         <dl className="kv">
           <dt>Tür</dt>
-          <dd>Code ({input.input.files.length} dosya)</dd>
+          <dd>Code ({files.length} dosya)</dd>
         </dl>
-        <ul className="file-list">
-          {input.input.files.map((file) => (
-            <li key={file.path} className="mono">
-              {file.path}
-            </li>
+        <div className="code-files">
+          {files.map((file) => (
+            <details key={file.path} className="code-file" open={files.length === 1}>
+              <summary className="code-file__path mono">{file.path}</summary>
+              <CodeViewer content={file.content} />
+            </details>
           ))}
-        </ul>
+        </div>
         {run.origin !== undefined && <OriginBlock origin={run.origin} />}
       </div>
     )
@@ -311,7 +485,10 @@ export const ProcessInspector = ({ proc }: { readonly proc: ProcessesState }): R
             </>
           )}
         </dl>
-        <div className="props__group">Adım logları</div>
+        <div className="props__group props__group--row">
+          <span>Adım logları</span>
+          {stepLogs.length > 0 && <CopyLogsButton lines={stepLogs} />}
+        </div>
         <div className="detail-logs">
           {stepLogs.length === 0 ? (
             <div className="console__empty">Log yok</div>
@@ -371,24 +548,35 @@ export const ProcessInspector = ({ proc }: { readonly proc: ProcessesState }): R
             <p className="rule-desc">{result.note}</p>
           </>
         )}
-        <div className="props__group">İlgili loglar</div>
-        <div className="detail-logs">
-          {(() => {
-            const matched = logs.filter((l) => l.message.startsWith(`${rule.title}:`))
-            return matched.length === 0 ? (
-              <div className="console__empty">Bu kurala ait log yok</div>
-            ) : (
-              matched.map((line) => (
-                <div key={line.seq} className="console__line">
-                  <span className="console__ts">{formatTime(line.at)}</span>
-                  <span style={{ color: LOG_COLOR[line.level] }}>{line.message}</span>
-                </div>
-              ))
-            )
-          })()}
-        </div>
+        {(() => {
+          const matched = logs.filter((l) => l.message.startsWith(`${rule.title}:`))
+          return (
+            <>
+              <div className="props__group props__group--row">
+                <span>İlgili loglar</span>
+                {matched.length > 0 && <CopyLogsButton lines={matched} />}
+              </div>
+              <div className="detail-logs">
+                {matched.length === 0 ? (
+                  <div className="console__empty">Bu kurala ait log yok</div>
+                ) : (
+                  matched.map((line) => (
+                    <div key={line.seq} className="console__line">
+                      <span className="console__ts">{formatTime(line.at)}</span>
+                      <span style={{ color: LOG_COLOR[line.level] }}>{line.message}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )
+        })()}
       </div>
     )
+  }
+
+  if (selected.kind === 'report') {
+    return <ReportPanel proc={proc} />
   }
 
   // selected.kind === 'result'

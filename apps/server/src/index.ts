@@ -7,7 +7,7 @@
  * alınır; worker onu arka planda işler ve ilerlemeyi canlı yayınlar.
  */
 
-import { builtinCodeCheckers } from '@covora/checkers'
+import { builtinCodeCheckers, CHECKER_CATALOG } from '@covora/checkers'
 import {
   assignPackToProject,
   cancelQueuedRun,
@@ -16,6 +16,7 @@ import {
   createPrismaClient,
   createProvider as createProviderRecord,
   createRule,
+  createIntegration,
   createRun,
   createUser,
   createWebhook,
@@ -23,6 +24,7 @@ import {
   deletePack,
   deleteProjectByKey,
   rotateIngestToken,
+  deleteIntegration,
   deleteProvider,
   deleteWebhook,
   ensureBuiltinPacks,
@@ -41,6 +43,7 @@ import {
   getRunReport,
   listActiveWebhooks,
   listEnabledRules,
+  listIntegrations,
   listManagementRules,
   listPacks,
   listPacksByProject,
@@ -56,11 +59,12 @@ import {
   setActiveProvider,
   setWebhookActive,
   toUser,
+  updateIntegration,
   updateRuleWithAudit,
   upsertProject,
   upsertProjectConfig
 } from '@covora/db'
-import type { User } from '@covora/types'
+import { gitProviderSchema, type User } from '@covora/types'
 
 import { buildApp } from './app.js'
 import { hashPassword, verifyPassword } from './auth/password.js'
@@ -71,12 +75,46 @@ import type { ReviewRoutesDeps } from './routes/reviews.js'
 import type { RunRoutesDeps } from './routes/runs.js'
 import { createChatSender } from './services/chat-factory.js'
 import { createRunEventBus } from './services/events.js'
-import type { ManagementDeps } from './services/management.js'
+import { cloneAndCollect, cloneAndCollectDiff } from './services/git-source.js'
+import { enqueueReview } from './services/review.service.js'
+import type {
+  ManagementDeps,
+  ProjectRecord,
+  PullReviewOptions,
+  PullReviewOutcome
+} from './services/management.js'
+import type { GitWebhookDeps } from './routes/git-webhook.js'
 import { dispatchReviewNotifications } from './services/notifications.js'
 import { createProviderResolver } from './services/provider-factory.js'
 import { checkProviderHealth } from './services/provider-health.js'
 import { unloadProvider, warmProvider } from './services/provider-control.js'
 import { startWorker } from './services/worker.js'
+
+/**
+ * Prisma proje kaydını yönetim okuma modeline çevirir. Gizli `gitToken` dönmez;
+ * yalnızca varlığı `hasGitToken` ile bildirilir. Geçersiz sağlayıcı değeri null'a
+ * düşer.
+ */
+const toProjectRecord = (project: {
+  readonly id: string
+  readonly key: string
+  readonly name: string
+  readonly ingestToken: string
+  readonly gitProvider: string | null
+  readonly gitRepoUrl: string | null
+  readonly gitToken: string | null
+}): ProjectRecord => {
+  const provider = gitProviderSchema.safeParse(project.gitProvider)
+  return {
+    id: project.id,
+    key: project.key,
+    name: project.name,
+    ingestToken: project.ingestToken,
+    gitProvider: provider.success ? provider.data : null,
+    gitRepoUrl: project.gitRepoUrl,
+    hasGitToken: project.gitToken !== null && project.gitToken.length > 0
+  }
+}
 
 /**
  * Sunucuyu yapılandırır ve dinlemeye başlatır.
@@ -112,6 +150,8 @@ const start = async (): Promise<void> => {
     bus,
     resolveProvider,
     listEnabledRules: (projectId, kind) => listEnabledRules(prisma, projectId, kind),
+    listRuleSnapshot: async (projectId, kind) =>
+      (await listManagementRules(prisma, projectId)).filter((rule) => rule.kind === kind),
     getEffectiveConfig: (projectId) => getEffectiveConfig(prisma, projectId),
     getLatestScore: (projectId, kind) => getLatestReviewScore(prisma, projectId, kind),
     notify: (payload) => {
@@ -144,24 +184,62 @@ const start = async (): Promise<void> => {
     getRunReport: (runId) => getRunReport(prisma, runId)
   }
 
+  // Depodan review tetikleme: hem studio (manuel) hem git webhook (otomatik) kullanır.
+  const pullReview = async (
+    key: string,
+    options: PullReviewOptions = {}
+  ): Promise<PullReviewOutcome> => {
+    const project = await findProjectByKey(prisma, key)
+    if (project === null) {
+      return { ok: false, reason: 'no-project' }
+    }
+    if (project.gitRepoUrl === null || project.gitRepoUrl.length === 0) {
+      return { ok: false, reason: 'no-git' }
+    }
+    const providerParsed = gitProviderSchema.safeParse(project.gitProvider)
+    const gitSource = {
+      provider: providerParsed.success ? providerParsed.data : null,
+      repoUrl: project.gitRepoUrl,
+      token: project.gitToken
+    }
+    // base+head → diff (yalnızca değişen dosyalar, changes kapsam); aksi halde
+    // tüm branch (project kapsam → ArchUnit kuralları da koşar).
+    const isDiff = options.base !== undefined && options.head !== undefined
+    const mode = isDiff ? 'changes' : 'project'
+    const collected = isDiff
+      ? await cloneAndCollectDiff(gitSource, { base: options.base!, head: options.head! }).then(
+          (result) => ({ files: result.files, commitSha: result.headSha, branch: result.branch })
+        )
+      : await cloneAndCollect(gitSource, options.ref !== undefined ? { ref: options.ref } : {})
+    const enqueued = await enqueueReview(
+      {
+        findProjectByKey: (k) => findProjectByKey(prisma, k),
+        createRun: (input) => createRun(prisma, input),
+        getQueuePosition: (runId) => getQueuePosition(prisma, runId),
+        getRun: (runId) => getRun(prisma, runId),
+        bus
+      },
+      {
+        projectKey: key,
+        codeHash: collected.commitSha,
+        input: { kind: 'code', files: collected.files, mode },
+        origin: { repoUrl: project.gitRepoUrl, branch: collected.branch, commitSha: collected.commitSha }
+      }
+    )
+    return {
+      ok: true,
+      runId: enqueued.runId,
+      ...(enqueued.queuePosition !== undefined ? { queuePosition: enqueued.queuePosition } : {})
+    }
+  }
+
   const managementDeps: ManagementDeps = {
     findProjectByKey: (key) => findProjectByKey(prisma, key),
-    upsertProject: async (key, name) => {
-      const project = await upsertProject(prisma, key, name)
-      return {
-        id: project.id,
-        key: project.key,
-        name: project.name,
-        ingestToken: project.ingestToken
-      }
+    upsertProject: async (key, name, git) => {
+      const project = await upsertProject(prisma, key, name, git)
+      return toProjectRecord(project)
     },
-    listProjects: async () =>
-      (await listProjects(prisma)).map((project) => ({
-        id: project.id,
-        key: project.key,
-        name: project.name,
-        ingestToken: project.ingestToken
-      })),
+    listProjects: async () => (await listProjects(prisma)).map(toProjectRecord),
     deleteProject: (key) => deleteProjectByKey(prisma, key),
     rotateIngestToken: (key) => rotateIngestToken(prisma, key),
     listRules: (projectId) => listManagementRules(prisma, projectId),
@@ -202,7 +280,13 @@ const start = async (): Promise<void> => {
     deleteProvider: (id) => deleteProvider(prisma, id),
     getProviderHealth: (id) => checkProviderHealth(prisma, id),
     warmProvider: (id) => warmProvider(prisma, id),
-    unloadProvider: (id) => unloadProvider(prisma, id)
+    unloadProvider: (id) => unloadProvider(prisma, id),
+    listIntegrations: () => listIntegrations(prisma),
+    createIntegration: (input) => createIntegration(prisma, input),
+    updateIntegration: (id, patch) => updateIntegration(prisma, id, patch),
+    deleteIntegration: (id) => deleteIntegration(prisma, id),
+    listCheckers: () => CHECKER_CATALOG,
+    pullReview
   }
 
   const chatDeps: ChatDeps = {
@@ -231,6 +315,19 @@ const start = async (): Promise<void> => {
     }
   }
 
+  const gitWebhookDeps: GitWebhookDeps = {
+    getProjectWebhookContext: async (key) => {
+      const project = await findProjectByKey(prisma, key)
+      if (project === null) {
+        return null
+      }
+      const providerParsed = gitProviderSchema.safeParse(project.gitProvider)
+      // İmza sırrı olarak projenin ingestToken'ı kullanılır (ayrı secret yok).
+      return { provider: providerParsed.success ? providerParsed.data : null, secret: project.ingestToken }
+    },
+    pullReview
+  }
+
   const app = buildApp({
     reviewDeps,
     runDeps,
@@ -238,6 +335,7 @@ const start = async (): Promise<void> => {
     chatDeps,
     authDeps,
     ingestDeps,
+    gitWebhookDeps,
     ...(env.COVORA_CORS_ORIGINS !== undefined ? { corsOrigins: env.COVORA_CORS_ORIGINS } : {})
   })
 

@@ -24,11 +24,23 @@ const systemPromptFor = (kind: ReviewKind): string => {
   const subject = kind === 'ui' ? 'kullanıcı arayüzü ekran görüntüsünü' : 'kaynak kodu'
   const role = kind === 'ui' ? 'arayüz (UI)' : 'kod'
   return [
+    'DİL KURALI (EN ÖNEMLİSİ): Yanıtındaki tüm "note" açıklamalarını MUTLAKA ve',
+    'YALNIZCA TÜRKÇE yaz. İngilizce tek kelime bile kullanma.',
     `Sen bir ${role} inceleme asistanısın.`,
     `Sana ${subject} ve bir kontrol listesi verilecek.`,
     'Her madde için yalnızca "pass", "partial" veya "fail" sonucunu ve kısa bir not döndür.',
     'Puan HESAPLAMA; sadece her maddeyi değerlendir.',
-    'Yanıtı istenen JSON şemasına birebir uygun ver ve her sonucu ilgili ruleId ile eşle.'
+    'ÇOK ÖNEMLİ — KURALLARA KESİNLİKLE UY:',
+    'Yalnızca aşağıda sana verilen numaralı kontrol listesi maddelerini yanıtla.',
+    'Yanıttaki sonuç sayısı, verilen madde sayısıyla TAM OLARAK aynı olmalı.',
+    'Her sonucun "ruleId" alanı, ilgili maddenin başındaki parantez içinde verilen',
+    'kimlikle (örn. "(code-okunabilirlik)") KARAKTER KARAKTER AYNI olmalıdır.',
+    'KENDİ kural adlarını (ör. "no-unused-vars", "no-console", "WCAG21_H1" gibi)',
+    'ASLA ÜRETME; sadece sana verilen kimlikleri kullan. Madde EKLEME veya ÇIKARMA.',
+    'Değerlendirmen kod okunabilirliğiyle ilgili birden çok gözlem içerse bile',
+    'bunları TEK bir sonucun "note" alanında birleştir; yeni madde açma.',
+    'TÜM notları/açıklamaları TÜRKÇE yaz (İngilizce yazma).',
+    'Yanıtı istenen JSON şemasına birebir uygun ver.'
   ].join(' ')
 }
 
@@ -54,13 +66,15 @@ export const buildChecklistMessages = (
 ): OllamaMessage[] => {
   const system: OllamaMessage = { role: 'system', content: systemPromptFor(input.kind) }
   const itemsBlock = items.map(formatItem).join('\n')
+  // Küçük modeller dil talimatını system'de bazen atlıyor; user mesajında da yinele.
+  const trReminder = '\n\nÖNEMLİ: Tüm "note" açıklamalarını Türkçe yaz.'
 
   if (input.kind === 'ui') {
     return [
       system,
       {
         role: 'user',
-        content: `Aşağıdaki kontrol listesini ekran görüntüsüne göre doldur:\n\n${itemsBlock}`,
+        content: `Aşağıdaki kontrol listesini ekran görüntüsüne göre doldur:\n\n${itemsBlock}${trReminder}`,
         images: [input.screenshot]
       }
     ]
@@ -71,7 +85,7 @@ export const buildChecklistMessages = (
     system,
     {
       role: 'user',
-      content: `Aşağıdaki kontrol listesini kaynak koda göre doldur:\n\n${itemsBlock}\n\nKaynak dosyalar:\n${filesBlock}`
+      content: `Aşağıdaki kontrol listesini kaynak koda göre doldur:\n\n${itemsBlock}\n\nKaynak dosyalar:\n${filesBlock}${trReminder}`
     }
   ]
 }

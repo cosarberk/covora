@@ -6,6 +6,7 @@
 
 import { randomBytes } from 'node:crypto'
 
+import type { GitConnectionInput } from '@covora/types'
 import type { PrismaClient } from '@prisma/client'
 
 /**
@@ -19,18 +20,37 @@ export const findProjectByKey = async (prisma: PrismaClient, key: string) =>
   prisma.project.findUnique({ where: { key } })
 
 /**
- * Bir projeyi anahtarına göre oluşturur ya da adını günceller.
+ * Git bağlantısı girdisini Prisma `data` parçasına çevirir. Yalnızca verilen
+ * alanlar yazılır (atlanan korunur, `null` temizler).
+ */
+const gitData = (git?: GitConnectionInput) =>
+  git === undefined
+    ? {}
+    : {
+        ...(git.gitProvider !== undefined ? { gitProvider: git.gitProvider } : {}),
+        ...(git.gitRepoUrl !== undefined ? { gitRepoUrl: git.gitRepoUrl } : {}),
+        ...(git.gitToken !== undefined ? { gitToken: git.gitToken } : {})
+      }
+
+/**
+ * Bir projeyi anahtarına göre oluşturur ya da adını/git bağlantısını günceller.
  *
  * @param prisma - Prisma client.
  * @param key - Proje anahtarı.
  * @param name - Proje adı.
+ * @param git - Opsiyonel git bağlantısı (provider/repoUrl/token).
  * @returns Oluşturulan/güncellenen proje.
  */
-export const upsertProject = async (prisma: PrismaClient, key: string, name: string) =>
+export const upsertProject = async (
+  prisma: PrismaClient,
+  key: string,
+  name: string,
+  git?: GitConnectionInput
+) =>
   prisma.project.upsert({
     where: { key },
-    create: { key, name },
-    update: { name }
+    create: { key, name, ...gitData(git) },
+    update: { name, ...gitData(git) }
   })
 
 /**

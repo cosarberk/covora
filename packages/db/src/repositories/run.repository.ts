@@ -11,6 +11,7 @@
 import { REVIEW_PIPELINE_STEPS } from '@covora/core'
 import type {
   LogLevel,
+  ManagementRule,
   ReviewInput,
   ReviewKind,
   ReviewOrigin,
@@ -132,6 +133,26 @@ export const claimNextQueued = async (prisma: PrismaClient): Promise<ClaimedRun 
     input: candidate.input,
     attempts: claimed?.attempts ?? 1
   }
+}
+
+/**
+ * Run çalışmaya başlarken o türe ait kuralların anlık görüntüsünü run'a yazar.
+ * Geçmiş akış/rapor bu snapshot'tan çizilir; kural sonradan değişse bile geçmiş
+ * korunur. Snapshot yalnızca gösterim içindir; pipeline mantığını etkilemez.
+ *
+ * @param prisma - Prisma client.
+ * @param runId - Run kimliği.
+ * @param rules - O türe ait kuralların (etkin+pasif) o anki hali.
+ */
+export const saveRulesSnapshot = async (
+  prisma: PrismaClient,
+  runId: string,
+  rules: readonly ManagementRule[]
+): Promise<void> => {
+  await prisma.reviewRun.update({
+    where: { id: runId },
+    data: { rulesSnapshot: rules as unknown as Prisma.InputJsonValue }
+  })
 }
 
 /** Run'ı `running` olarak işaretler ve başlangıç zamanını (boşsa) damgalar. */
