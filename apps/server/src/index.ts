@@ -12,6 +12,18 @@ import {
   assignPackToProject,
   cancelQueuedRun,
   countUsers,
+  createBlueprint,
+  createBlueprintRun,
+  deleteBlueprint,
+  duplicateBlueprint,
+  getBlueprint,
+  getBlueprintRun,
+  getBlueprintRunLogs,
+  listBlueprints,
+  listBlueprintRuns,
+  listBlueprintVersions,
+  renameBlueprint,
+  saveBlueprintVersion,
   createPack,
   createPrismaClient,
   createProvider as createProviderRecord,
@@ -64,17 +76,22 @@ import {
   upsertProject,
   upsertProjectConfig
 } from '@covora/db'
+import { createDefaultRegistry } from '@covora/flow'
 import { gitProviderSchema, type User } from '@covora/types'
 
 import { buildApp } from './app.js'
 import { hashPassword, verifyPassword } from './auth/password.js'
 import { loadEnv } from './config/env.js'
 import type { AuthDeps } from './routes/auth.js'
+import type { BlueprintRoutesDeps } from './routes/blueprints.js'
 import type { ChatDeps } from './routes/chat.js'
 import type { ReviewRoutesDeps } from './routes/reviews.js'
 import type { RunRoutesDeps } from './routes/runs.js'
+import { createBlueprintEventBus } from './services/blueprint-events.js'
+import { runBlueprint } from './services/blueprint-runner.js'
 import { createChatSender } from './services/chat-factory.js'
 import { createRunEventBus } from './services/events.js'
+import { createFlowServices } from './services/flow-services.js'
 import { cloneAndCollect, cloneAndCollectDiff } from './services/git-source.js'
 import { enqueueReview } from './services/review.service.js'
 import type {
@@ -182,6 +199,47 @@ const start = async (): Promise<void> => {
     cancelRun: (runId) => cancelQueuedRun(prisma, runId),
     getRunInput: (runId) => getRunInput(prisma, runId),
     getRunReport: (runId) => getRunReport(prisma, runId)
+  }
+
+  // Blueprint (Studio Builder) motoru: ayrı olay yolu + yerleşik node defteri +
+  // gerçek servisleri saran FlowServices. Çalıştırma beklemeden tetiklenir;
+  // node ilerlemesi DB'ye kalıcı + SSE ile canlı yayınlanır.
+  const blueprintBus = createBlueprintEventBus()
+  const flowRegistry = createDefaultRegistry()
+  const flowServices = createFlowServices({
+    prisma,
+    resolveProvider,
+    checkers: builtinCodeCheckers
+  })
+  const blueprintDeps: BlueprintRoutesDeps = {
+    bus: blueprintBus,
+    listBlueprints: () => listBlueprints(prisma),
+    getBlueprint: (key, version) => getBlueprint(prisma, key, version),
+    createBlueprint: (input) => createBlueprint(prisma, input),
+    saveBlueprintVersion: (key, input) => saveBlueprintVersion(prisma, key, input),
+    renameBlueprint: (key, patch) => renameBlueprint(prisma, key, patch),
+    duplicateBlueprint: (key, target) => duplicateBlueprint(prisma, key, target),
+    deleteBlueprint: (key) => deleteBlueprint(prisma, key),
+    listBlueprintVersions: (key) => listBlueprintVersions(prisma, key),
+    createBlueprintRun: (input) => createBlueprintRun(prisma, input),
+    listBlueprintRuns: (options) => listBlueprintRuns(prisma, options),
+    getBlueprintRun: (runId) => getBlueprintRun(prisma, runId),
+    getBlueprintRunLogs: (runId, afterSeq) => getBlueprintRunLogs(prisma, runId, afterSeq),
+    startRun: ({ runId, graph }) => {
+      void runBlueprint(
+        {
+          prisma,
+          bus: blueprintBus,
+          registry: flowRegistry,
+          services: flowServices,
+          loadGraph: async (key, version) => {
+            const bp = await getBlueprint(prisma, key, version)
+            return bp === null ? null : bp.graph
+          }
+        },
+        { runId, graph }
+      )
+    }
   }
 
   // Depodan review tetikleme: hem studio (manuel) hem git webhook (otomatik) kullanır.
@@ -331,6 +389,7 @@ const start = async (): Promise<void> => {
   const app = buildApp({
     reviewDeps,
     runDeps,
+    blueprintDeps,
     managementDeps,
     chatDeps,
     authDeps,

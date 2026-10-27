@@ -15,6 +15,7 @@ import type {
   GatePolicy,
   GitProvider,
   Integration,
+  LogLevel,
   ManagementRule,
   Pack,
   ProviderCapabilities,
@@ -31,13 +32,16 @@ import type {
   RuleResult,
   RunEvent,
   RunLogLine,
+  RunStatus,
   RunSummary,
   Severity,
+  StepStatus,
   UpdateIntegrationInput,
   User,
   Webhook,
   WebhookEvent
 } from '@covora/types'
+import type { FlowGraph, NodeTypeMeta, PortSpec } from '@covora/flow'
 
 /** Bir projenin etkin yapılandırması (coverage + gate). */
 export interface ProjectConfig {
@@ -164,6 +168,95 @@ export interface UpdateRuleInput {
   readonly enabled?: boolean
 }
 
+// ── Blueprint (Studio Builder) ────────────────────────────────────────────────
+
+/** Blueprint liste satırı. */
+export interface BlueprintSummary {
+  readonly key: string
+  readonly name: string
+  readonly description: string
+  readonly latestVersion: number
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+/** Tek bir blueprint (bir sürümün grafıyla). */
+export interface BlueprintDetail extends BlueprintSummary {
+  readonly version: number
+  readonly graph: FlowGraph
+}
+
+/** Sürüm geçmişi satırı. */
+export interface BlueprintVersionSummary {
+  readonly version: number
+  readonly note: string | null
+  readonly createdBy: string | null
+  readonly createdAt: string
+}
+
+/** Blueprint run özeti. */
+export interface BlueprintRunSummary {
+  readonly id: string
+  readonly blueprintKey: string
+  readonly version: number
+  readonly status: RunStatus
+  readonly trigger: string | null
+  readonly error: string | null
+  readonly createdAt: string
+  readonly startedAt: string | null
+  readonly finishedAt: string | null
+}
+
+/** Bir node'un yürütme izi. */
+export interface BlueprintNodeRun {
+  readonly nodeId: string
+  readonly nodeType: string
+  readonly status: StepStatus
+  readonly output: unknown
+  readonly error: string | null
+  readonly startedAt: string | null
+  readonly finishedAt: string | null
+}
+
+/** Run detayı (node izleriyle). */
+export interface BlueprintRunDetail extends BlueprintRunSummary {
+  readonly nodeRuns: readonly BlueprintNodeRun[]
+}
+
+/** Run log satırı. */
+export interface BlueprintRunLogLine {
+  readonly seq: number
+  readonly at: string
+  readonly level: LogLevel
+  readonly nodeId: string | null
+  readonly message: string
+}
+
+/** Blueprint run canlı olayı (SSE). */
+export type BlueprintRunEvent =
+  | { readonly type: 'bp.run.snapshot'; readonly run: BlueprintRunDetail; readonly logs: readonly BlueprintRunLogLine[] }
+  | { readonly type: 'bp.run.updated'; readonly runId: string; readonly status: RunStatus; readonly at: string }
+  | { readonly type: 'bp.node.updated'; readonly runId: string; readonly node: BlueprintNodeRun }
+  | { readonly type: 'bp.log.appended'; readonly runId: string; readonly line: BlueprintRunLogLine }
+  | { readonly type: 'bp.run.finished'; readonly runId: string; readonly status: RunStatus; readonly at: string; readonly error?: string }
+
+/**
+ * Bir blueprint'in dış arayüzü (içindeki Giriş/Çıkış node'larından türeyen tipli
+ * portlar). Bir `Alt-Blueprint` node'u, gömdüğü blueprint'i bu arayüzle çizer.
+ */
+export interface BlueprintInterface {
+  readonly inputs: readonly PortSpec[]
+  readonly outputs: readonly PortSpec[]
+}
+
+/** Yeni blueprint oluşturma girdisi. */
+export interface CreateBlueprintInput {
+  readonly name: string
+  readonly key?: string
+  readonly description?: string
+  readonly graph: FlowGraph
+}
+
 /** Studio API arayüzü. */
 export interface StudioApi {
   /** Kayıtlı token var mı (oturum açık kabul edilir). */
@@ -248,6 +341,38 @@ export interface StudioApi {
   updateIntegration(id: string, patch: UpdateIntegrationInput): Promise<Integration>
   /** Bir bağlantıyı siler. */
   deleteIntegration(id: string): Promise<void>
+
+  // ── Blueprint (Studio Builder) ──────────────────────────────────────────
+  /** Node türü paletini (defterden) getirir. */
+  listNodeTypes(): Promise<readonly NodeTypeMeta[]>
+  /** Tüm blueprint'leri listeler. */
+  listBlueprints(): Promise<readonly BlueprintSummary[]>
+  /** Bir blueprint'i (opsiyonel sürümün grafıyla) getirir. */
+  getBlueprint(key: string, version?: number): Promise<BlueprintDetail>
+  /** Yeni blueprint oluşturur; anahtar + sürümü döner. */
+  createBlueprint(input: CreateBlueprintInput): Promise<{ readonly key: string; readonly version: number }>
+  /** Yeni sürüm kaydeder (graf snapshot'ı); yeni sürüm numarasını döner. */
+  saveBlueprintVersion(key: string, graph: FlowGraph, note?: string): Promise<{ readonly version: number }>
+  /** Ad/açıklama günceller. */
+  renameBlueprint(key: string, patch: { readonly name?: string; readonly description?: string }): Promise<void>
+  /** Blueprint'i çoğaltır; yeni anahtarı döner. */
+  duplicateBlueprint(key: string, input?: { readonly name?: string; readonly key?: string }): Promise<{ readonly key: string }>
+  /** Blueprint'i (tüm sürüm/run'larıyla) siler. */
+  deleteBlueprint(key: string): Promise<void>
+  /** Sürüm geçmişini getirir. */
+  listBlueprintVersions(key: string): Promise<readonly BlueprintVersionSummary[]>
+  /** Bir blueprint'in dış arayüzünü (Giriş/Çıkış portlarını) getirir. */
+  getBlueprintInterface(key: string, version?: number): Promise<BlueprintInterface>
+  /** Bir blueprint sürümünü gerçek motorla çalıştırır; run kimliğini döner. */
+  runBlueprint(key: string, version?: number): Promise<{ readonly runId: string }>
+  /** Blueprint run'larını (opsiyonel blueprint filtresiyle) listeler. */
+  listBlueprintRuns(key?: string): Promise<readonly BlueprintRunSummary[]>
+  /** Bir run'ı node izleriyle getirir. */
+  getBlueprintRun(runId: string): Promise<BlueprintRunDetail>
+  /** Bir run'ın loglarını getirir. */
+  getBlueprintRunLogs(runId: string, afterSeq?: number): Promise<readonly BlueprintRunLogLine[]>
+  /** Bir run'ın olaylarına canlı abone olur; aboneliği sonlandıran fonksiyonu döner. */
+  streamBlueprintRun(runId: string, onEvent: (event: BlueprintRunEvent) => void): () => void
 }
 
 const TOKEN_KEY = 'covora.token'
@@ -320,6 +445,43 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body)
     })
+
+  /**
+   * Bir SSE uç noktasına bağlanıp `data:` satırlarını JSON olarak `onEvent`'e
+   * akıtır. Aboneliği sonlandıran (bağlantıyı kapatan) fonksiyonu döner. Hem
+   * review run hem blueprint run akışları bunu kullanır.
+   */
+  const streamSse = <E>(path: string, onEvent: (event: E) => void): (() => void) => {
+    const controller = new AbortController()
+    void (async () => {
+      const headers = new Headers()
+      if (token !== null) headers.set('authorization', `Bearer ${token}`)
+      const response = await fetch(url(path), { headers, signal: controller.signal })
+      if (!response.ok || response.body === null) return
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const chunks = buffer.split('\n\n')
+        buffer = chunks.pop() ?? ''
+        for (const chunk of chunks) {
+          const dataLine = chunk.split('\n').find((line) => line.startsWith('data:'))
+          if (dataLine === undefined) continue
+          try {
+            onEvent(JSON.parse(dataLine.slice(5).trim()) as E)
+          } catch {
+            // Bozuk satır atlanır.
+          }
+        }
+      }
+    })().catch(() => {
+      // Abort ya da ağ hatası: sessizce biter (UI yeniden bağlanabilir).
+    })
+    return () => controller.abort()
+  }
 
   return {
     hasSession() {
@@ -441,46 +603,7 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
     },
 
     streamRun(id, onEvent) {
-      const controller = new AbortController()
-      void (async () => {
-        const headers = new Headers()
-        if (token !== null) {
-          headers.set('authorization', `Bearer ${token}`)
-        }
-        const response = await fetch(url(`/runs/${encodeURIComponent(id)}/events`), {
-          headers,
-          signal: controller.signal
-        })
-        if (!response.ok || response.body === null) {
-          return
-        }
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
-        for (;;) {
-          const { value, done } = await reader.read()
-          if (done) {
-            break
-          }
-          buffer += decoder.decode(value, { stream: true })
-          const chunks = buffer.split('\n\n')
-          buffer = chunks.pop() ?? ''
-          for (const chunk of chunks) {
-            const dataLine = chunk.split('\n').find((line) => line.startsWith('data:'))
-            if (dataLine === undefined) {
-              continue
-            }
-            try {
-              onEvent(JSON.parse(dataLine.slice(5).trim()) as RunEvent)
-            } catch {
-              // Bozuk satır atlanır.
-            }
-          }
-        }
-      })().catch(() => {
-        // Abort ya da ağ hatası: sessizce biter (UI yeniden bağlanabilir).
-      })
-      return () => controller.abort()
+      return streamSse<RunEvent>(`/runs/${encodeURIComponent(id)}/events`, onEvent)
     },
 
     async listRules(projectKey) {
@@ -624,6 +747,88 @@ export const createStudioApi = (config: StudioApiConfig): StudioApi => {
 
     async deleteIntegration(id) {
       ok(await authFetch(`/integrations/${encodeURIComponent(id)}`, { method: 'DELETE' }))
+    },
+
+    // ── Blueprint (Studio Builder) ────────────────────────────────────────
+    async listNodeTypes() {
+      const data = await json<{ types: NodeTypeMeta[] }>(await authFetch('/node-types'))
+      return data.types
+    },
+
+    async listBlueprints() {
+      const data = await json<{ blueprints: BlueprintSummary[] }>(await authFetch('/blueprints'))
+      return data.blueprints
+    },
+
+    async getBlueprint(key, version) {
+      const suffix = version !== undefined ? `?version=${version}` : ''
+      return json<BlueprintDetail>(await authFetch(`/blueprints/${encodeURIComponent(key)}${suffix}`))
+    },
+
+    async createBlueprint(input) {
+      return json<{ key: string; version: number }>(await postJson('/blueprints', input))
+    },
+
+    async saveBlueprintVersion(key, graph, note) {
+      return json<{ version: number }>(
+        await postJson(`/blueprints/${encodeURIComponent(key)}`, note !== undefined ? { graph, note } : { graph }, 'PUT')
+      )
+    },
+
+    async renameBlueprint(key, patch) {
+      ok(await postJson(`/blueprints/${encodeURIComponent(key)}`, patch, 'PATCH'))
+    },
+
+    async duplicateBlueprint(key, input) {
+      return json<{ key: string }>(
+        await postJson(`/blueprints/${encodeURIComponent(key)}/duplicate`, input ?? {})
+      )
+    },
+
+    async deleteBlueprint(key) {
+      ok(await authFetch(`/blueprints/${encodeURIComponent(key)}`, { method: 'DELETE' }))
+    },
+
+    async listBlueprintVersions(key) {
+      const data = await json<{ versions: BlueprintVersionSummary[] }>(
+        await authFetch(`/blueprints/${encodeURIComponent(key)}/versions`)
+      )
+      return data.versions
+    },
+
+    async getBlueprintInterface(key, version) {
+      const suffix = version !== undefined ? `?version=${version}` : ''
+      return json<BlueprintInterface>(
+        await authFetch(`/blueprints/${encodeURIComponent(key)}/interface${suffix}`)
+      )
+    },
+
+    async runBlueprint(key, version) {
+      return json<{ runId: string }>(
+        await postJson(`/blueprints/${encodeURIComponent(key)}/run`, version !== undefined ? { version } : {})
+      )
+    },
+
+    async listBlueprintRuns(key) {
+      const suffix = key !== undefined ? `?key=${encodeURIComponent(key)}` : ''
+      const data = await json<{ runs: BlueprintRunSummary[] }>(await authFetch(`/blueprint-runs${suffix}`))
+      return data.runs
+    },
+
+    async getBlueprintRun(runId) {
+      return json<BlueprintRunDetail>(await authFetch(`/blueprint-runs/${encodeURIComponent(runId)}`))
+    },
+
+    async getBlueprintRunLogs(runId, afterSeq) {
+      const suffix = afterSeq !== undefined ? `?afterSeq=${afterSeq}` : ''
+      const data = await json<{ logs: BlueprintRunLogLine[] }>(
+        await authFetch(`/blueprint-runs/${encodeURIComponent(runId)}/logs${suffix}`)
+      )
+      return data.logs
+    },
+
+    streamBlueprintRun(runId, onEvent) {
+      return streamSse<BlueprintRunEvent>(`/blueprint-runs/${encodeURIComponent(runId)}/events`, onEvent)
     }
   }
 }

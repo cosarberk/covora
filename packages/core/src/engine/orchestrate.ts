@@ -57,16 +57,38 @@ const toChecklistItem = (rule: Rule): ChecklistItem => ({
   description: rule.description
 })
 
+/** {@link evaluateRules} girdileri (coverage/gate hariç değerlendirme adımı). */
+export interface EvaluateRulesOptions {
+  /** Değerlendirilecek kural kümesi. */
+  readonly rules: readonly Rule[]
+  /** Review girdisi. */
+  readonly input: ReviewInput
+  /** LLM-yargı kuralları için sağlayıcı. */
+  readonly provider: LlmProvider
+  /** Deterministik kurallar için checker kaydı (opsiyonel). */
+  readonly checkers?: CheckerRegistry
+}
+
+/** Değerlendirme adımının çıktısı: sonuçlar + ilgili (skorlamaya giren) kurallar. */
+export interface RuleEvaluation {
+  /** Her değerlendirilen kuralın sonucu. */
+  readonly results: readonly RuleResult[]
+  /** Girdinin `kind`'ıyla eşleşen (coverage ağırlıklandırmasına giren) kurallar. */
+  readonly relevantRules: readonly Rule[]
+}
+
 /**
- * Review'ı uçtan uca çalıştırır: kuralları değerlendirir, coverage hesaplar ve
- * merge gate kararını üretir. Yalnızca girdinin `kind`'ıyla eşleşen kurallar
- * değerlendirilir.
+ * Review kurallarını değerlendirir (coverage/gate'ten bağımsız adım). Yalnızca
+ * girdinin `kind`'ıyla eşleşen kurallar değerlendirilir; deterministik kurallar
+ * checker'larla ya da istemci sonucuyla, LLM-yargı kuralları sağlayıcıyla.
+ * Blueprint motoru bu adımı ayrı bir node olarak çalıştırır; `runReview` da bunu
+ * kullanır (tek kaynak).
  *
- * @param options - Kurallar, girdi, sağlayıcı, yapılandırma ve politika.
- * @returns Coverage ve gate kararını içeren review sonucu.
+ * @param options - Kurallar, girdi, sağlayıcı ve checker kaydı.
+ * @returns Kural sonuçları ve skorlamaya giren ilgili kurallar.
  */
-export const runReview = async (options: RunReviewOptions): Promise<ReviewOutcome> => {
-  const { rules, input, provider, config, policy, checkers = {} } = options
+export const evaluateRules = async (options: EvaluateRulesOptions): Promise<RuleEvaluation> => {
+  const { rules, input, provider, checkers = {} } = options
 
   const relevantRules = rules.filter((rule) => rule.kind === input.kind)
   const deterministicRules = relevantRules.filter((rule) => rule.evaluation === 'deterministic')
@@ -101,7 +123,21 @@ export const runReview = async (options: RunReviewOptions): Promise<ReviewOutcom
       ? (await provider.fillChecklist(input, llmRules.map(toChecklistItem))).results
       : []
 
-  const results: RuleResult[] = [...deterministicResults, ...llmResults]
+  return { results: [...deterministicResults, ...llmResults], relevantRules }
+}
+
+/**
+ * Review'ı uçtan uca çalıştırır: kuralları değerlendirir, coverage hesaplar ve
+ * merge gate kararını üretir. Yalnızca girdinin `kind`'ıyla eşleşen kurallar
+ * değerlendirilir.
+ *
+ * @param options - Kurallar, girdi, sağlayıcı, yapılandırma ve politika.
+ * @returns Coverage ve gate kararını içeren review sonucu.
+ */
+export const runReview = async (options: RunReviewOptions): Promise<ReviewOutcome> => {
+  const { rules, input, provider, config, policy, checkers = {} } = options
+
+  const { results, relevantRules } = await evaluateRules({ rules, input, provider, checkers })
   const coverage = computeCoverage(relevantRules, results, config)
   const gate = evaluateGate(coverage, policy)
 

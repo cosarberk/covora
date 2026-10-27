@@ -5,14 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Covora Test Sayfası</title>
 
-    <!-- 1) Covora bağlantı ayarları — kendi değerlerinle doldur -->
+    <!-- 1) Covora bağlantı ayarları — varsayılanlar. Gizli token'ı BURAYA yazma;
+         test/config.local.js (gitignore'lu) oluşturup orada ver (aşağıda yüklenir). -->
     <script>
       window.COVORA_CONFIG = {
-        serverUrl: 'https://covora.yeten2.com', // kendi Covora URL'in
-        projectKey: 'test-ui', // studio'da oluşturduğun proje anahtarı
-        ingestToken: 'cmu70cc2j000ffj2s3d2g9vo7' // proje başlığından kopyala
+        serverUrl: 'http://localhost:4300', // local server portu (apps/server .env PORT)
+        projectKey: 'test-ui', // studio'da oluşturduğun projenin anahtarı
+        ingestToken: '' // test/config.local.js içinde ver — commit'e girmesin
       }
     </script>
+    <!-- Yerel override (gitignore'lu; yoksa 404 verir, sorun değil) -->
+    <script src="./config.local.js"></script>
 
     <style>
       * {
