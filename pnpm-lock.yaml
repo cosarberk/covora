@@ -32,6 +32,9 @@ importers:
       '@covora/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@covora/flow':
+        specifier: workspace:*
+        version: link:../../packages/flow
       '@covora/provider-ollama':
         specifier: workspace:*
         version: link:../../packages/provider-ollama
@@ -63,6 +66,9 @@ importers:
       '@covora/client':
         specifier: workspace:*
         version: link:../../packages/client
+      '@covora/flow':
+        specifier: workspace:*
+        version: link:../../packages/flow
       '@covora/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -174,6 +180,19 @@ importers:
       prisma:
         specifier: ^5.22.0
         version: 5.22.0
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.2)(jsdom@25.0.1)
+
+  packages/flow:
+    dependencies:
+      '@covora/types':
+        specifier: workspace:*
+        version: link:../types
+      zod:
+        specifier: ^4.3.6
+        version: 4.6.2
+    devDependencies:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.2)(jsdom@25.0.1)
