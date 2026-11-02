@@ -262,7 +262,19 @@ export const executeReviewRun = async (
   // project modda tüm kurallar; changes modda proje-geneli (ArchUnit) hariç.
   // scope tanımsızsa (eski/dışarıdan kural) güvenli varsayılan: changes.
   const inScope = (rule: Rule): boolean => (mode === 'project' ? true : rule.scope !== 'project')
-  const relevantRules = deps.rules.filter((rule) => rule.kind === kind && inScope(rule))
+  // UI review'da ekran tipine (surface) göre filtre: `genel` her zaman, diğer
+  // surface'ler yalnızca review'ın bildirdiği ekran tipiyle eşleşince. Görsel
+  // olmayan (visual=false) davranışsal kurallar tek ekran görüntüsünden
+  // doğrulanamaz; hiç değerlendirmeye alınmaz (modele gönderilmez, skorlamaya girmez).
+  const surface = input.kind === 'ui' ? (input.surface ?? 'genel') : 'genel'
+  const relevantRules = deps.rules.filter((rule) => {
+    if (rule.kind !== kind || !inScope(rule)) return false
+    if (input.kind === 'ui') {
+      if (!rule.visual) return false
+      if (rule.surface !== 'genel' && rule.surface !== surface) return false
+    }
+    return true
+  })
   const skippedProjectRules =
     mode === 'project' ? 0 : deps.rules.filter((rule) => rule.kind === kind && rule.scope === 'project').length
   const deterministicRules = relevantRules.filter((rule) => rule.evaluation === 'deterministic')

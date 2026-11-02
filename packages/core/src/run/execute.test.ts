@@ -231,4 +231,35 @@ describe('executeReviewRun', () => {
     expect(result.outcome?.gate.reasons.some((r) => r.includes('kural yok'))).toBe(true)
     expect(rec.logs.some((l) => l.level === 'warn' && l.stepKey === 'ingest')).toBe(true)
   })
+
+  it('UI review: yalnızca genel + seçili surface ve visual=true kurallar değerlendirilir', async () => {
+    const rec = makeRecordingSink()
+    let sentIds: readonly string[] = []
+    const provider: LlmProvider = {
+      kind: 'ui',
+      fillChecklist: async (_input, items) => {
+        sentIds = items.map((i) => i.ruleId)
+        return { results: items.map((i) => ({ ruleId: i.ruleId, outcome: 'pass' as const })) }
+      }
+    }
+    const rules: Rule[] = [
+      { ...uiRule('genel-vis', 'llm'), surface: 'genel', visual: true },
+      { ...uiRule('genel-behav', 'llm'), surface: 'genel', visual: false },
+      { ...uiRule('liste-1', 'llm'), surface: 'liste', visual: true },
+      { ...uiRule('form-1', 'llm'), surface: 'form', visual: true },
+      { ...uiRule('onizleme-1', 'llm'), surface: 'onizleme', visual: true }
+    ]
+
+    await executeReviewRun(
+      baseDeps({
+        rules,
+        input: { kind: 'ui', screenshot: 'data:image/png;base64,xx', surface: 'liste' },
+        provider,
+        sink: rec.sink
+      })
+    )
+
+    // genel-behav (visual=false), form ve onizleme elenmeli; sadece genel-vis + liste-1 kalmalı.
+    expect([...sentIds].sort()).toEqual(['genel-vis', 'liste-1'])
+  })
 })
