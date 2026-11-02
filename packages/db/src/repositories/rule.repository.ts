@@ -10,6 +10,7 @@ import type {
   ManagementRule,
   ReviewKind,
   ReviewScope,
+  ReviewSurface,
   RuleEvaluationType,
   Rule,
   Severity
@@ -34,6 +35,10 @@ export interface CreateRuleData {
   readonly evaluation: RuleEvaluationType
   /** Kapsam (changes / project=ArchUnit); verilmezse changes. */
   readonly scope?: ReviewScope
+  /** UI ekran tipi (genel / liste / onizleme / form); verilmezse genel. */
+  readonly surface?: ReviewSurface
+  /** Tek görüntüden doğrulanabilir mi; verilmezse true. */
+  readonly visual?: boolean
   /** Önem derecesi. */
   readonly severity: Severity
   /** Coverage ağırlığı. */
@@ -124,6 +129,8 @@ export const createRule = async (
       kind: data.kind,
       evaluation: data.evaluation,
       scope: data.scope ?? 'changes',
+      surface: data.surface ?? 'genel',
+      visual: data.visual ?? true,
       severity: data.severity,
       weight: data.weight,
       prompt: data.prompt ?? null,

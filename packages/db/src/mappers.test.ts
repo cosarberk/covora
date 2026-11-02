@@ -18,6 +18,8 @@ const prismaRule: PrismaRule = {
   kind: 'ui',
   evaluation: 'llm',
   scope: 'changes',
+  surface: 'genel',
+  visual: true,
   severity: 'warning',
   weight: 2,
   prompt: null,

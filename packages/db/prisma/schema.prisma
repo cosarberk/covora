@@ -147,6 +147,11 @@ model Rule {
   evaluation  RuleEvaluation
   /// Kapsam: "changes" (diff/verilen dosyalar) | "project" (ArchUnit, tüm depo).
   scope       String         @default("changes")
+  /// UI ekran tipi: "genel" | "liste" | "onizleme" | "form". Code için "genel".
+  surface     String         @default("genel")
+  /// Tek ekran görüntüsünden doğrulanabilir mi? false = davranışsal (görsel
+  /// modele gönderilmez, skorlamaya girmez).
+  visual      Boolean        @default(true)
   severity    Severity
   weight      Float
   prompt      String?

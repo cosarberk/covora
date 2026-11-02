@@ -207,6 +207,15 @@
         display: flex;
         gap: 8px;
       }
+      #covora-surface {
+        background: #0b0e1a;
+        color: #fff;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 10px 14px;
+        font-size: 13px;
+        cursor: pointer;
+      }
       #covora-review-code {
         background: #0b0e1a;
         color: #fff;
@@ -342,6 +351,12 @@
     <div id="covora-widget">
       <div id="covora-status"></div>
       <div class="cv-actions">
+        <select id="covora-surface" title="UI review: ekran tipi (genel + bu tipe özel kurallar koşar)">
+          <option value="genel">Genel</option>
+          <option value="liste">Listeleme</option>
+          <option value="onizleme">Ön İzleme</option>
+          <option value="form">Form</option>
+        </select>
         <button id="covora-review" type="button">UI Review</button>
         <button id="covora-review-code" type="button">Kod Review</button>
       </div>
@@ -355,6 +370,7 @@
       const cfg = window.COVORA_CONFIG
       const btn = document.getElementById('covora-review')
       const codeBtn = document.getElementById('covora-review-code')
+      const surfaceSel = document.getElementById('covora-surface')
       const panel = document.getElementById('covora-status')
 
       const client = Covora.createCovoraClient({
@@ -449,7 +465,8 @@
           // Sadece #page'i incele; sağ alttaki widget review'a girmesin.
           const page = document.getElementById('page')
           const run = await client.reviewUi('test-' + Date.now(), page, {
-            onProgress: onProgress(state)
+            onProgress: onProgress(state),
+            surface: surfaceSel.value
           })
           paintResult(state, run, 'Detay: Studio → Süreçler (UI)')
         } catch (e) {

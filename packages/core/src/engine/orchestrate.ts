@@ -90,7 +90,19 @@ export interface RuleEvaluation {
 export const evaluateRules = async (options: EvaluateRulesOptions): Promise<RuleEvaluation> => {
   const { rules, input, provider, checkers = {} } = options
 
-  const relevantRules = rules.filter((rule) => rule.kind === input.kind)
+  // UI review'da ekran tipine göre filtre: `genel` her zaman, diğer surface'ler
+  // yalnızca review'ın bildirdiği ekran tipiyle eşleşirse. Ayrıca statik
+  // görüntüden doğrulanamayan davranışsal kurallar (visual=false) hiç
+  // değerlendirmeye alınmaz — görsel modele gönderilmez, skorlamaya da girmez.
+  const surface = input.kind === 'ui' ? (input.surface ?? 'genel') : 'genel'
+  const relevantRules = rules.filter((rule) => {
+    if (rule.kind !== input.kind) return false
+    if (input.kind === 'ui') {
+      if (!rule.visual) return false
+      if (rule.surface !== 'genel' && rule.surface !== surface) return false
+    }
+    return true
+  })
   const deterministicRules = relevantRules.filter((rule) => rule.evaluation === 'deterministic')
   const llmRules = relevantRules.filter((rule) => rule.evaluation === 'llm')
 

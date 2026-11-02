@@ -9,7 +9,7 @@ import type { ChecklistItem, ReviewInput, Rule, RuleResult } from '@covora/types
 import { describe, expect, it, vi } from 'vitest'
 
 import { defaultCoverageConfig } from '../coverage/config.js'
-import { runReview, type CheckerRegistry } from './orchestrate.js'
+import { evaluateRules, runReview, type CheckerRegistry } from './orchestrate.js'
 import type { LlmProvider } from './provider.js'
 
 /**
@@ -33,6 +33,8 @@ const makeRule = (overrides: Partial<Rule> & Pick<Rule, 'id'>): Rule => ({
   kind: 'ui',
   evaluation: 'llm',
   scope: 'changes',
+  surface: 'genel',
+  visual: true,
   severity: 'warning',
   weight: 1,
   ...overrides
@@ -116,5 +118,67 @@ describe('runReview', () => {
     expect(outcome.coverage.score).toBe(0)
     expect(outcome.gate.passed).toBe(false)
     expect(outcome.coverage.failedBlockers).toEqual(['det'])
+  })
+})
+
+describe('evaluateRules — UI ekran tipi (surface) ve görsel (visual) filtresi', () => {
+  it('yalnızca genel + seçilen ekran tipindeki kuralları değerlendirir', async () => {
+    const rules = [
+      makeRule({ id: 'genel', surface: 'genel' }),
+      makeRule({ id: 'liste', surface: 'liste' }),
+      makeRule({ id: 'form', surface: 'form' })
+    ]
+    const provider = passingProvider('ui')
+
+    const { relevantRules } = await evaluateRules({
+      rules,
+      input: { kind: 'ui', screenshot: 'data', surface: 'liste' },
+      provider
+    })
+
+    expect(relevantRules.map((r) => r.id).sort()).toEqual(['genel', 'liste'])
+  })
+
+  it('surface verilmezse yalnızca genel kuralları alır', async () => {
+    const rules = [makeRule({ id: 'genel', surface: 'genel' }), makeRule({ id: 'liste', surface: 'liste' })]
+    const provider = passingProvider('ui')
+
+    const { relevantRules } = await evaluateRules({ rules, input: uiInput, provider })
+
+    expect(relevantRules.map((r) => r.id)).toEqual(['genel'])
+  })
+
+  it('davranışsal (visual=false) kuralları hem değerlendirmeden hem görsel modelden eler', async () => {
+    const rules = [
+      makeRule({ id: 'gorsel', surface: 'liste', visual: true }),
+      makeRule({ id: 'davranissal', surface: 'liste', visual: false })
+    ]
+    const provider = passingProvider('ui')
+
+    const { relevantRules } = await evaluateRules({
+      rules,
+      input: { kind: 'ui', screenshot: 'data', surface: 'liste' },
+      provider
+    })
+
+    expect(relevantRules.map((r) => r.id)).toEqual(['gorsel'])
+    // Görsel modele giden checklist yalnızca visual=true kuralı içermeli.
+    const items = vi.mocked(provider.fillChecklist).mock.calls[0]?.[1] ?? []
+    expect(items.map((i) => i.ruleId)).toEqual(['gorsel'])
+  })
+
+  it('code review surface/visual filtresinden etkilenmez', async () => {
+    const rules = [makeRule({ id: 'c1', kind: 'code', evaluation: 'deterministic', surface: 'genel' })]
+    const checkers: CheckerRegistry = { c1: (rule) => ({ ruleId: rule.id, outcome: 'pass' }) }
+    const provider = passingProvider('code')
+
+    const { relevantRules } = await evaluateRules({
+      rules,
+      input: { kind: 'code', files: [{ path: 'a.ts', content: 'x' }] },
+      provider,
+      checkers
+    })
+
+    expect(relevantRules.map((r) => r.id)).toEqual(['c1'])
   })
 })
