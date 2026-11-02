@@ -15,6 +15,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 
 import { makeIngestGuard, makeUserGuard, type IngestGuardDeps } from './auth/guard.js'
 import { registerAuthRoutes, type AuthDeps } from './routes/auth.js'
+import { registerBlueprintRoutes, type BlueprintRoutesDeps } from './routes/blueprints.js'
 import { registerChatRoutes, type ChatDeps } from './routes/chat.js'
 import { registerGitWebhookRoutes, type GitWebhookDeps } from './routes/git-webhook.js'
 import { registerHealthRoutes } from './routes/health.js'
@@ -29,6 +30,8 @@ export interface AppDeps {
   readonly reviewDeps: ReviewRoutesDeps
   /** Run (Süreçler) yönetim bağımlılıkları. */
   readonly runDeps: RunRoutesDeps
+  /** Studio Builder (Blueprint) yönetim + çalıştırma bağımlılıkları. */
+  readonly blueprintDeps: BlueprintRoutesDeps
   /** Yönetim (studio) bağımlılıkları. */
   readonly managementDeps: ManagementDeps
   /** İnteraktif sohbet bağımlılıkları. */
@@ -89,6 +92,7 @@ export const buildApp = (deps: AppDeps): FastifyInstance => {
     scope.get('/auth/me', async (request) => ({ user: request.user ?? null }))
     registerManagementRoutes(scope, deps.managementDeps)
     registerRunRoutes(scope, deps.runDeps)
+    registerBlueprintRoutes(scope, deps.blueprintDeps)
   })
 
   // Studio (React) statik dosyalarını aynı sunucudan serve et (tek image).

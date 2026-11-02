@@ -299,7 +299,7 @@ export const getRun = async (prisma: PrismaClient, runId: string): Promise<Revie
     include: {
       steps: true,
       project: { select: { key: true } },
-      review: { select: { score: true, level: true, gatePassed: true } }
+      review: { select: { score: true, level: true, gatePassed: true, outcome: true } }
     }
   })
   if (run === null) {

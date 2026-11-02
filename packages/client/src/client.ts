@@ -8,7 +8,14 @@
  * ilerleme olayını `onProgress`'e iletir.
  */
 
-import type { ReviewInput, ReviewOrigin, ReviewRun, RunEvent, RunStatus } from '@covora/types'
+import type {
+  ReviewInput,
+  ReviewOrigin,
+  ReviewRun,
+  ReviewSurface,
+  RunEvent,
+  RunStatus
+} from '@covora/types'
 
 import { captureScreenshot } from './capture.js'
 import { runDomChecks } from './dom-checks.js'
@@ -60,6 +67,11 @@ export interface EnqueueResponse {
 export interface ReviewOptions {
   /** Her ilerleme olayında çağrılır (adım/log/durum). */
   readonly onProgress?: (event: RunEvent) => void
+  /**
+   * Yalnızca `reviewUi`: review edilen ekranın tipi. `genel` + bu tipe ait
+   * kurallar değerlendirilir. Verilmezse yalnızca genel kurallar koşar.
+   */
+  readonly surface?: ReviewSurface
 }
 
 /** Covora client arayüzü. */
@@ -218,7 +230,11 @@ export const createCovoraClient = (config: CovoraClientConfig): CovoraClient => 
   ): Promise<ReviewRun> => {
     const screenshot = await captureScreenshot(element)
     const clientResults = runDomChecks(element)
-    return review({ input: { kind: 'ui', screenshot, clientResults }, codeHash }, options)
+    const input: ReviewInput =
+      options?.surface !== undefined
+        ? { kind: 'ui', screenshot, clientResults, surface: options.surface }
+        : { kind: 'ui', screenshot, clientResults }
+    return review({ input, codeHash }, options)
   }
 
   return { enqueue, follow, review, reviewUi }

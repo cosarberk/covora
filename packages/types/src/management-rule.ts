@@ -8,7 +8,12 @@
 
 import { z } from 'zod'
 
-import { ruleEvaluationTypeSchema, reviewKindSchema, reviewScopeSchema } from './rule.js'
+import {
+  ruleEvaluationTypeSchema,
+  reviewKindSchema,
+  reviewScopeSchema,
+  reviewSurfaceSchema
+} from './rule.js'
 import { severitySchema } from './severity.js'
 
 /** Studio'da yönetilen kural. */
@@ -27,6 +32,10 @@ export const managementRuleSchema = z.object({
   evaluation: ruleEvaluationTypeSchema,
   /** Kapsam (changes / project=ArchUnit). */
   scope: reviewScopeSchema.default('changes'),
+  /** UI ekran tipi (genel / liste / onizleme / form). */
+  surface: reviewSurfaceSchema.default('genel'),
+  /** Tek görüntüden doğrulanabilir mi (davranışsal kurallar false). */
+  visual: z.boolean().default(true),
   /** Önem derecesi. */
   severity: severitySchema,
   /** Coverage ağırlığı. */

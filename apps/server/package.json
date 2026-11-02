@@ -18,6 +18,7 @@
     "@covora/checkers": "workspace:*",
     "@covora/core": "workspace:*",
     "@covora/db": "workspace:*",
+    "@covora/flow": "workspace:*",
     "@covora/provider-ollama": "workspace:*",
     "@covora/types": "workspace:*",
     "@fastify/cors": "^10.0.1",

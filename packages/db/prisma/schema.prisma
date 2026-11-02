@@ -147,6 +147,11 @@ model Rule {
   evaluation  RuleEvaluation
   /// Kapsam: "changes" (diff/verilen dosyalar) | "project" (ArchUnit, tüm depo).
   scope       String         @default("changes")
+  /// UI ekran tipi: "genel" | "liste" | "onizleme" | "form". Code için "genel".
+  surface     String         @default("genel")
+  /// Tek ekran görüntüsünden doğrulanabilir mi? false = davranışsal (görsel
+  /// modele gönderilmez, skorlamaya girmez).
+  visual      Boolean        @default(true)
   severity    Severity
   weight      Float
   prompt      String?
@@ -327,4 +332,98 @@ model ProjectConfig {
   gateBlockOnFailedBlockers Boolean @default(true)
   gateBlockOnRegression     Boolean @default(false)
   regressionThreshold       Float   @default(5)
+}
+
+/// Studio Builder akışı (Blueprint). Çalışma-alanı geneli, adlı ve versiyonlu bir
+/// node/edge grafı. Tek bir projeye bağlı değildir — proje, grafın bir girdi
+/// node'udur. Yürütme motoru (@covora/flow) bu grafı koşar.
+model Blueprint {
+  id            String             @id @default(cuid())
+  key           String             @unique
+  name          String
+  description   String             @default("")
+  /// En güncel sürüm numarası (BlueprintVersion.version ile hizalı).
+  latestVersion Int                @default(0)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  versions      BlueprintVersion[]
+  runs          BlueprintRun[]
+}
+
+/// Bir blueprint'in değişmez anlık görüntüsü. Her kayıt yeni bir sürüm üretir →
+/// versiyonlama, geri alma ve diff mümkün. `graph` @covora/flow şemasıyla doğrulanır.
+model BlueprintVersion {
+  id          String         @id @default(cuid())
+  blueprintId String
+  blueprint   Blueprint      @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  version     Int
+  /// Graf JSON'u: { nodes:[{id,type,position,params}], edges:[{id,source,sourceHandle,target,targetHandle}] }.
+  graph       Json
+  note        String?
+  createdBy   String?
+  createdAt   DateTime       @default(now())
+  runs        BlueprintRun[]
+
+  @@unique([blueprintId, version])
+  @@index([blueprintId, version])
+}
+
+/// Bir blueprint sürümünün tek bir yürütmesi. Kuyruğa alınır, node'lardan geçer,
+/// loglanır. Node-başına iz BlueprintNodeRun'da; canlı akış SSE ile yayınlanır.
+model BlueprintRun {
+  id          String             @id @default(cuid())
+  blueprintId String
+  blueprint   Blueprint          @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  versionId   String
+  version     BlueprintVersion   @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  status      RunStatus          @default(queued)
+  /// Tetikleyen (manuel/webhook/zamanlı) + opsiyonel girdi değerleri.
+  trigger     String?
+  inputs      Json?
+  /// Run `failed` olduğunda kök hata özeti.
+  error       String?
+  createdAt   DateTime           @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  nodeRuns    BlueprintNodeRun[]
+  logs        BlueprintRunLog[]
+
+  @@index([blueprintId, createdAt])
+  @@index([status, createdAt])
+}
+
+/// Bir blueprint run'ındaki tek bir node'un yürütme izi: durumu, ürettiği çıktı
+/// (hangi porttan ne aktı → debug/port-değeri inceleme) ve süresi.
+model BlueprintNodeRun {
+  id         String       @id @default(cuid())
+  runId      String
+  run        BlueprintRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  /// Graf içindeki node id'si.
+  nodeId     String
+  nodeType   String
+  status     StepStatus   @default(pending)
+  /// Node'un çıkış portlarına göre ürettiği değerler (port adı → değer).
+  output     Json?
+  error      String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  @@unique([runId, nodeId])
+  @@index([runId])
+}
+
+/// Bir blueprint run'ına (ve opsiyonel bir node'a) ait log satırı. Canlı akar,
+/// kalıcı saklanır.
+model BlueprintRunLog {
+  id      String       @id @default(cuid())
+  runId   String
+  run     BlueprintRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  seq     Int
+  at      DateTime     @default(now())
+  level   LogLevel     @default(info)
+  nodeId  String?
+  message String
+
+  @@unique([runId, seq])
+  @@index([runId, seq])
 }

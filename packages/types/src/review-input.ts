@@ -8,7 +8,7 @@
 import { z } from 'zod'
 
 import { ruleResultSchema } from './checklist.js'
-import { reviewScopeSchema } from './rule.js'
+import { reviewScopeSchema, reviewSurfaceSchema } from './rule.js'
 
 /** Code review'da değerlendirilecek tek bir kaynak dosya. */
 export const codeFileSchema = z.object({
@@ -34,7 +34,12 @@ export const reviewInputSchema = z.discriminatedUnion('kind', [
      * Client tarafında (DOM üzerinde) hesaplanan deterministik kural sonuçları.
      * Server DOM'a erişemediği için UI deterministik kuralları burada gelir.
      */
-    clientResults: z.array(ruleResultSchema).optional()
+    clientResults: z.array(ruleResultSchema).optional(),
+    /**
+     * Review edilen ekranın tipi. Yalnızca `genel` + bu tipe ait kurallar
+     * değerlendirmeye girer. Verilmezse `genel` (sadece genel kurallar).
+     */
+    surface: reviewSurfaceSchema.optional()
   }),
   z.object({
     kind: z.literal('code'),

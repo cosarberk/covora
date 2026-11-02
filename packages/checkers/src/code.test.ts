@@ -41,6 +41,8 @@ const rule: Rule = {
   kind: 'code',
   evaluation: 'deterministic',
   scope: 'changes',
+  surface: 'genel',
+  visual: true,
   severity: 'warning',
   weight: 1
 }

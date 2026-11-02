@@ -9,6 +9,7 @@ import {
   integrationProviderSchema,
   managementRuleSchema,
   reviewOriginSchema,
+  reviewOutcomeSchema,
   userRoleSchema,
   webhookEventSchema,
   type AuditRecord,
@@ -20,6 +21,7 @@ import {
   type ProviderConfig,
   type ProviderType,
   type ReviewOrigin,
+  type ReviewOutcome,
   type ReviewRun,
   type Rule,
   type RunLogLine,
@@ -52,6 +54,10 @@ import type {
  * @param rule - Prisma kural kaydı.
  * @returns Domain {@link Rule}.
  */
+/** DB'deki serbest string surface'i güvenle union'a daraltır (bilinmeyen = genel). */
+const toSurface = (value: string): Rule['surface'] =>
+  value === 'liste' || value === 'onizleme' || value === 'form' ? value : 'genel'
+
 export const toDomainRule = (rule: PrismaRule): Rule => ({
   id: rule.key,
   title: rule.title,
@@ -59,6 +65,8 @@ export const toDomainRule = (rule: PrismaRule): Rule => ({
   kind: rule.kind,
   evaluation: rule.evaluation,
   scope: rule.scope === 'project' ? 'project' : 'changes',
+  surface: toSurface(rule.surface),
+  visual: rule.visual,
   severity: rule.severity,
   weight: rule.weight
 })
@@ -78,6 +86,8 @@ export const toManagementRule = (rule: PrismaRule): ManagementRule => ({
   kind: rule.kind,
   evaluation: rule.evaluation,
   scope: rule.scope === 'project' ? 'project' : 'changes',
+  surface: toSurface(rule.surface),
+  visual: rule.visual,
   severity: rule.severity,
   weight: rule.weight,
   enabled: rule.enabled,
@@ -239,11 +249,25 @@ const rulesSnapshotField = (raw: unknown): { readonly rulesSnapshot?: Management
   return parsed.success && parsed.data.length > 0 ? { rulesSnapshot: parsed.data } : {}
 }
 
+/**
+ * Review kaydındaki ham `outcome` JSON'ını (coverage + gate + kural sonuçları)
+ * domain {@link ReviewOutcome}'a çevirir; yoksa/şema uymazsa spread için boş
+ * nesne döner. Rapor (Studio/mock-shell) bu alanı okur — eksikse "Kural sonucu
+ * yok" görünür.
+ */
+const outcomeField = (raw: unknown): { readonly outcome?: ReviewOutcome } => {
+  if (raw === null || raw === undefined) {
+    return {}
+  }
+  const parsed = reviewOutcomeSchema.safeParse(raw)
+  return parsed.success ? { outcome: parsed.data } : {}
+}
+
 export const toReviewRun = (
   run: PrismaReviewRun,
   projectKey: string,
   steps: readonly PrismaRunStep[],
-  review: Pick<PrismaReview, 'score' | 'level' | 'gatePassed'> | null,
+  review: Pick<PrismaReview, 'score' | 'level' | 'gatePassed' | 'outcome'> | null,
   queuePosition?: number
 ): ReviewRun => ({
   id: run.id,
@@ -263,7 +287,8 @@ export const toReviewRun = (
   delta: run.delta,
   ...(run.error !== null ? { error: run.error } : {}),
   ...originField(run.origin),
-  ...rulesSnapshotField(run.rulesSnapshot)
+  ...rulesSnapshotField(run.rulesSnapshot),
+  ...outcomeField(review?.outcome)
 })
 
 /** Prisma run kaydını (bağlı review özetiyle) liste satırına dönüştürür. */

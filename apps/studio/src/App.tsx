@@ -33,12 +33,13 @@ import { ReviewsPanel } from './components/ReviewsPanel.js'
 import { RulesPanel } from './components/RulesPanel.js'
 import { SettingsPanel } from './components/SettingsPanel.js'
 import { WebhooksPanel } from './components/WebhooksPanel.js'
+import { BuilderPanel } from './components/builder/BuilderPanel.js'
 
 const serverUrl = import.meta.env.VITE_COVORA_SERVER_URL ?? ''
 const defaultApi = createStudioApi({ baseUrl: serverUrl })
 
 type Tab = 'packs' | 'rules' | 'reviews' | 'webhooks' | 'settings' | 'integration'
-type View = 'dashboard' | 'projects' | 'project' | 'providers' | 'packs' | 'processes' | 'integrations'
+type View = 'dashboard' | 'projects' | 'project' | 'providers' | 'packs' | 'processes' | 'integrations' | 'builder'
 
 const PROJECT_TABS: readonly { readonly id: Tab; readonly icon: IconName; readonly label: string }[] = [
   { id: 'rules', icon: 'rules', label: 'Kurallar' },
@@ -53,6 +54,7 @@ const NAV: readonly { readonly id: View; readonly icon: IconName; readonly label
   { id: 'dashboard', icon: 'dashboard', label: 'Genel Bakış' },
   { id: 'projects', icon: 'project', label: 'Projeler' },
   { id: 'processes', icon: 'flow', label: 'Süreçler' },
+  { id: 'builder', icon: 'flow', label: 'Builder' },
   { id: 'packs', icon: 'packages', label: 'Review Paketleri' },
   { id: 'providers', icon: 'ai', label: 'AI Sağlayıcılar' },
   { id: 'integrations', icon: 'plug', label: 'Bağlamalar' }
@@ -530,6 +532,9 @@ export const App = ({
     }
     if (view === 'integrations') {
       return <IntegrationsPanel api={api} />
+    }
+    if (view === 'builder') {
+      return <BuilderPanel api={api} />
     }
     if (selectedProject === null) {
       return <div className="state">Bir proje seçili değil. Projeler ekranından bir proje aç.</div>

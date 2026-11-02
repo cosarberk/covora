@@ -30,6 +30,22 @@ export const reviewScopeSchema = z.enum(['changes', 'project'])
 /** {@link reviewScopeSchema} tip çıkarımı. */
 export type ReviewScope = z.infer<typeof reviewScopeSchema>
 
+/**
+ * UI kuralının hangi ekran tipine (surface) ait olduğu. Review tetiklenirken
+ * ekran tipi seçilir; `genel` her UI review'ında geçerlidir, diğerleri yalnızca
+ * o ekran tipi review edilirken değerlendirmeye girer.
+ * - `genel`: tüm ekranlar (ör. buton isimleri ≤ 2 kelime).
+ * - `liste`: listeleme ekranı kuralları.
+ * - `onizleme`: ön izleme ekranı kuralları.
+ * - `form`: form ekranı kuralları.
+ *
+ * Code review kuralları her zaman `genel`'dir (surface yalnızca UI için anlamlı).
+ */
+export const reviewSurfaceSchema = z.enum(['genel', 'liste', 'onizleme', 'form'])
+
+/** {@link reviewSurfaceSchema} tip çıkarımı. */
+export type ReviewSurface = z.infer<typeof reviewSurfaceSchema>
+
 /** Review türü: görsel arayüz (UI) ya da kaynak kod. */
 export const reviewKindSchema = z.enum(['ui', 'code'])
 
@@ -56,6 +72,17 @@ export const ruleSchema = z.object({
    * `project` (ArchUnit) yalnızca proje-geneli akışta koşar.
    */
   scope: reviewScopeSchema.default('changes'),
+  /**
+   * UI kuralının ekran tipi. `genel` her zaman; `liste`/`onizleme`/`form` yalnızca
+   * o ekran tipi review edilirken. Code kuralları için `genel` (anlamsız).
+   */
+  surface: reviewSurfaceSchema.default('genel'),
+  /**
+   * Kural tek bir ekran görüntüsünden doğrulanabilir mi? `false` ise davranışsal
+   * kuraldır (ör. "primary aksiyon sonrası onay modalı açılmalı") ve statik
+   * görüntüden görülemez — görsel modele GÖNDERİLMEZ, skorlamaya da girmez.
+   */
+  visual: z.boolean().default(true),
   /** Önem derecesi. */
   severity: severitySchema,
   /** Coverage katkı ağırlığı (pozitif). */
